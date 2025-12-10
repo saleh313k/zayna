@@ -1,0 +1,61 @@
+# ============================================
+# docker-compose.yml
+# ============================================
+version: '3.8'
+
+services:
+  # SQL Server Database
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: zayna-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - zayna-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    container_name: zayna-backend
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=ZaynaDB;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+      - Jwt__Key=YourSuperSecretKeyForJwtTokenGenerationMinimum32Characters!
+      - Jwt__Issuer=https://zayna.om
+      - Jwt__Audience=https://zayna.om
+    ports:
+      - "5000:80"
+    depends_on:
+      - sqlserver
+    networks:
+      - zayna-network
+
+  # Frontend React App
+  frontend:
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
+    container_name: zayna-frontend
+    environment:
+      - VITE_API_URL=http://localhost:5000/api
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - zayna-network
+
+volumes:
+  sqlserver_data:
+
+networks:
+  zayna-network:
+    driver: bridge

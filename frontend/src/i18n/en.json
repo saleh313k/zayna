@@ -1,0 +1,108 @@
+{
+  "brand": {
+    "name": "ZAYNA",
+    "slogan": "Your Time to Shine"
+  },
+  "nav": {
+    "home": "Home",
+    "salons": "Salons",
+    "bookings": "My Bookings",
+    "profile": "Profile",
+    "dashboard": "Dashboard",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout"
+  },
+  "auth": {
+    "phoneNumber": "Phone Number",
+    "enterPhone": "Enter your phone number",
+    "sendOtp": "Send OTP",
+    "verifyOtp": "Verify OTP",
+    "enterOtp": "Enter OTP code",
+    "fullName": "Full Name",
+    "email": "Email Address",
+    "chooseRole": "I am a",
+    "customer": "Customer",
+    "salon": "Salon Owner",
+    "registerBtn": "Register",
+    "loginBtn": "Login",
+    "alreadyAccount": "Already have an account?",
+    "noAccount": "Don't have an account?",
+    "orContinueWith": "Or continue with",
+    "otpSent": "OTP sent successfully",
+    "otpVerified": "OTP verified",
+    "loginSuccess": "Login successful",
+    "registerSuccess": "Registration successful"
+  },
+  "wizard": {
+    "step1": "Select User Type",
+    "step2": "Contact Information",
+    "step3": "Complete Profile",
+    "next": "Next",
+    "previous": "Previous",
+    "finish": "Finish"
+  },
+  "customer": {
+    "dashboard": "Dashboard",
+    "bookings": "My Bookings",
+    "profile": "My Profile",
+    "newBooking": "New Booking",
+    "upcomingBookings": "Upcoming Appointments",
+    "pastBookings": "Past Appointments",
+    "cancelBooking": "Cancel Booking",
+    "confirmCancel": "Are you sure you want to cancel this booking?",
+    "cancellationReason": "Cancellation Reason",
+    "loyaltyPoints": "Loyalty Points"
+  },
+  "salon": {
+    "dashboard": "Salon Dashboard",
+    "branches": "Branches",
+    "stylists": "Stylists",
+    "services": "Services",
+    "appointments": "Appointments",
+    "customers": "Customers",
+    "reports": "Reports",
+    "addBranch": "Add Branch",
+    "addStylist": "Add Stylist",
+    "addService": "Add Service",
+    "manageSchedule": "Manage Schedule"
+  },
+  "booking": {
+    "selectSalon": "Select Salon",
+    "selectBranch": "Select Branch",
+    "selectService": "Select Service",
+    "selectStylist": "Select Stylist",
+    "selectDate": "Select Date",
+    "selectTime": "Select Time",
+    "paymentMethod": "Payment Method",
+    "payOnline": "Pay Online",
+    "payInPerson": "Pay In Person",
+    "bookNow": "Book Now",
+    "bookingConfirmed": "Booking Confirmed",
+    "totalPrice": "Total Price",
+    "notes": "Additional Notes"
+  },
+  "status": {
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "noShow": "No Show"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "loading": "Loading...",
+    "noData": "No data available",
+    "error": "An error occurred",
+    "success": "Success",
+    "confirm": "Confirm",
+    "viewDetails": "View Details",
+    "close": "Close"
+  }
+}

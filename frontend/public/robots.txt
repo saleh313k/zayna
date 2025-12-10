@@ -1,0 +1,7 @@
+// ============================================
+// public/robots.txt
+// ============================================
+User-agent: *
+Allow: /
+
+Sitemap: https://zayna.om/sitemap.xml

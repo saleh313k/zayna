@@ -1,0 +1,108 @@
+{
+  "brand": {
+    "name": "زَيْنَة",
+    "slogan": "وقتك للتألق"
+  },
+  "nav": {
+    "home": "الرئيسية",
+    "salons": "الصالونات",
+    "bookings": "حجوزاتي",
+    "profile": "الملف الشخصي",
+    "dashboard": "لوحة التحكم",
+    "login": "تسجيل الدخول",
+    "register": "إنشاء حساب",
+    "logout": "تسجيل الخروج"
+  },
+  "auth": {
+    "phoneNumber": "رقم الهاتف",
+    "enterPhone": "أدخل رقم هاتفك",
+    "sendOtp": "إرسال رمز التحقق",
+    "verifyOtp": "تحقق من الرمز",
+    "enterOtp": "أدخل رمز التحقق",
+    "fullName": "الاسم الكامل",
+    "email": "البريد الإلكتروني",
+    "chooseRole": "أنا",
+    "customer": "عميل",
+    "salon": "صاحب صالون",
+    "registerBtn": "إنشاء حساب",
+    "loginBtn": "تسجيل الدخول",
+    "alreadyAccount": "لديك حساب بالفعل؟",
+    "noAccount": "ليس لديك حساب؟",
+    "orContinueWith": "أو تابع مع",
+    "otpSent": "تم إرسال رمز التحقق بنجاح",
+    "otpVerified": "تم التحقق من الرمز",
+    "loginSuccess": "تم تسجيل الدخول بنجاح",
+    "registerSuccess": "تم إنشاء الحساب بنجاح"
+  },
+  "wizard": {
+    "step1": "اختر نوع المستخدم",
+    "step2": "معلومات الاتصال",
+    "step3": "إكمال الملف الشخصي",
+    "next": "التالي",
+    "previous": "السابق",
+    "finish": "إنهاء"
+  },
+  "customer": {
+    "dashboard": "لوحة التحكم",
+    "bookings": "حجوزاتي",
+    "profile": "ملفي الشخصي",
+    "newBooking": "حجز جديد",
+    "upcomingBookings": "المواعيد القادمة",
+    "pastBookings": "المواعيد السابقة",
+    "cancelBooking": "إلغاء الحجز",
+    "confirmCancel": "هل أنت متأكد من إلغاء هذا الحجز؟",
+    "cancellationReason": "سبب الإلغاء",
+    "loyaltyPoints": "نقاط الولاء"
+  },
+  "salon": {
+    "dashboard": "لوحة تحكم الصالون",
+    "branches": "الفروع",
+    "stylists": "المصففين",
+    "services": "الخدمات",
+    "appointments": "المواعيد",
+    "customers": "العملاء",
+    "reports": "التقارير",
+    "addBranch": "إضافة فرع",
+    "addStylist": "إضافة مصفف",
+    "addService": "إضافة خدمة",
+    "manageSchedule": "إدارة الجدول"
+  },
+  "booking": {
+    "selectSalon": "اختر الصالون",
+    "selectBranch": "اختر الفرع",
+    "selectService": "اختر الخدمة",
+    "selectStylist": "اختر المصفف",
+    "selectDate": "اختر التاريخ",
+    "selectTime": "اختر الوقت",
+    "paymentMethod": "طريقة الدفع",
+    "payOnline": "الدفع الإلكتروني",
+    "payInPerson": "الدفع عند الزيارة",
+    "bookNow": "احجز الآن",
+    "bookingConfirmed": "تم تأكيد الحجز",
+    "totalPrice": "السعر الإجمالي",
+    "notes": "ملاحظات إضافية"
+  },
+  "status": {
+    "pending": "قيد الانتظار",
+    "confirmed": "مؤكد",
+    "completed": "مكتمل",
+    "cancelled": "ملغى",
+    "noShow": "لم يحضر"
+  },
+  "common": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "search": "بحث",
+    "filter": "تصفية",
+    "export": "تصدير",
+    "loading": "جاري التحميل...",
+    "noData": "لا توجد بيانات",
+    "error": "حدث خطأ",
+    "success": "نجح",
+    "confirm": "تأكيد",
+    "viewDetails": "عرض التفاصيل",
+    "close": "إغلاق"
+  }
+}
