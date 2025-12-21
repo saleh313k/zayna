@@ -1,6 +1,5 @@
 using ZAYNA.Core.Enums;
 
-
 namespace ZAYNA.Core.Entities
 {
     public class User
@@ -14,6 +13,11 @@ namespace ZAYNA.Core.Entities
         public string? FullNameAr { get; set; }
         public string? ProfileImageUrl { get; set; }
         public bool IsActive { get; set; } = true;
+
+        // New properties used by the DbInitializer / Infrastructure
+        public bool IsPhoneVerified { get; set; } = false;
+        public bool IsEmailVerified { get; set; } = false;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 
@@ -23,6 +27,4 @@ namespace ZAYNA.Core.Entities
         public Stylist? Stylist { get; set; }
         public ICollection<SocialAuthProvider> SocialAuthProviders { get; set; } = new List<SocialAuthProvider>();
     }
-
-
 }

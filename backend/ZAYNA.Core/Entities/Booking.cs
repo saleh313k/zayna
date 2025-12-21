@@ -2,7 +2,6 @@ using ZAYNA.Core.Enums;
 
 namespace ZAYNA.Core.Entities
 {
-
     public class Booking
     {
         public Guid Id { get; set; }
@@ -15,7 +14,21 @@ namespace ZAYNA.Core.Entities
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
         public BookingStatus Status { get; set; } = BookingStatus.Pending;
+
+        // Infrastructure expects TotalAmount and BookingNumber.
+        // Keep existing TotalPrice for backward compatibility and sync with TotalAmount.
         public decimal TotalPrice { get; set; }
+
+        // New property expected by Infrastructure
+        public decimal TotalAmount
+        {
+            get => TotalPrice;
+            set => TotalPrice = value;
+        }
+
+        // New property expected by Infrastructure
+        public string? BookingNumber { get; set; }
+
         public string? Notes { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
@@ -31,7 +44,4 @@ namespace ZAYNA.Core.Entities
         public Payment? Payment { get; set; }
         public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
     }
-
-
-
 }

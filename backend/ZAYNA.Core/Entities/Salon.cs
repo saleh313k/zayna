@@ -1,28 +1,25 @@
+using ZAYNA.Core.Enums;
+
 namespace ZAYNA.Core.Entities
 {
-
     public class Salon
     {
         public Guid Id { get; set; }
-        public Guid UserId { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string? NameAr { get; set; }
-        public string? Description { get; set; }
-        public string? DescriptionAr { get; set; }
-        public string? LogoUrl { get; set; }
-        public string? CoverImageUrl { get; set; }
-        public string PhoneNumber { get; set; } = string.Empty;
-        public string? Email { get; set; }
-        public string? Website { get; set; }
-        public bool IsActive { get; set; } = true;
+
+        public string? SalonName { get; set; }
+        public string? SalonNameAr { get; set; }
+        public string? AboutText { get; set; }
+        public string? AboutTextAr { get; set; }
+        public string? ContactPhone { get; set; }
+        public string? ContactEmail { get; set; }
+        public bool IsVerified { get; set; }
+        public double Rating { get; set; } = 0.0;
+        public int TotalReviews { get; set; } = 0;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 
-        // Navigation properties
-        public User User { get; set; } = null!;
+        // Navigation
         public ICollection<Branch> Branches { get; set; } = new List<Branch>();
-        public ICollection<Stylist> Stylists { get; set; } = new List<Stylist>();
-        public ICollection<Service> Services { get; set; } = new List<Service>();
-        public ICollection<Review> Reviews { get; set; } = new List<Review>();
     }
 }
