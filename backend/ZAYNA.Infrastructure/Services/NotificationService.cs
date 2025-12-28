@@ -1,15 +1,16 @@
-// ZAYNA.Infrastructure/Services/NotificationService.cs
+using Zayna.Core.Interfaces;
+using ZAYNA.Core.Enums;
 namespace ZAYNA.Infrastructure.Services
 {
     public class NotificationService : INotificationService
     {
         private readonly IRepository<Notification> _notificationRepository;
-        private readonly ISMSService _smsService;
+        private readonly ISmsService _smsService;
         private readonly IEmailService _emailService;
 
         public NotificationService(
             IRepository<Notification> notificationRepository,
-            ISMSService smsService,
+            ISmsService smsService,
             IEmailService emailService)
         {
             _notificationRepository = notificationRepository;
@@ -26,20 +27,19 @@ namespace ZAYNA.Infrastructure.Services
                 TitleAr = "تم تأكيد الحجز",
                 Message = $"Your booking #{booking.BookingNumber} has been confirmed for {booking.BookingDate:dd/MM/yyyy} at {booking.StartTime}",
                 MessageAr = $"تم تأكيد حجزك #{booking.BookingNumber} بتاريخ {booking.BookingDate:dd/MM/yyyy} في الساعة {booking.StartTime}",
-                Type = "BookingConfirmation"
+                Type = Core.Enums.NotificationType.BookingConfirmation 
             };
 
             await _notificationRepository.AddAsync(notification);
 
             // Send SMS
-            await _smsService.SendSMSAsync(booking.Customer.User.PhoneNumber, notification.Message);
+            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
 
             // Send Email if available
             if (!string.IsNullOrEmpty(booking.Customer.User.Email))
             {
                 await _emailService.SendBookingConfirmationAsync(
                     booking.Customer.User.Email,
-                    booking.Customer.FullName,
                     notification.Message);
             }
         }
@@ -53,11 +53,11 @@ namespace ZAYNA.Infrastructure.Services
                 TitleAr = "تذكير بالحجز",
                 Message = $"Reminder: Your appointment is in 2 hours at {booking.Salon.SalonName}",
                 MessageAr = $"تذكير: موعدك بعد ساعتين في {booking.Salon.SalonNameAr ?? booking.Salon.SalonName}",
-                Type = "BookingReminder"
+                Type = NotificationType.BookingReminder
             };
 
             await _notificationRepository.AddAsync(notification);
-            await _smsService.SendSMSAsync(booking.Customer.User.PhoneNumber, notification.Message);
+            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
         }
 
         public async Task SendBookingCancellationAsync(Booking booking)
@@ -69,11 +69,11 @@ namespace ZAYNA.Infrastructure.Services
                 TitleAr = "تم إلغاء الحجز",
                 Message = $"Your booking #{booking.BookingNumber} has been cancelled.",
                 MessageAr = $"تم إلغاء حجزك #{booking.BookingNumber}",
-                Type = "BookingCancellation"
+                Type = NotificationType.BookingCancellation
             };
 
             await _notificationRepository.AddAsync(notification);
-            await _smsService.SendSMSAsync(booking.Customer.User.PhoneNumber, notification.Message);
+            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
         }
 
         public async Task<IEnumerable<Notification>> GetUserNotificationsAsync(Guid userId)

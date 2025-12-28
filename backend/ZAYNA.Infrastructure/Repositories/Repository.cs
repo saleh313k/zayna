@@ -66,4 +66,19 @@ public class Repository<T> : IRepository<T> where T : class
     {
         return await _dbSet.CountAsync(predicate);
     }
+
+    public Task<T?> FirstOrDefaultAsync(Expression<Func<T, bool>> predicate)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task UpdateRangeAsync(IEnumerable<T> entities)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task DeleteAsync(T entity)
+    {
+        throw new NotImplementedException();
+    }
 }

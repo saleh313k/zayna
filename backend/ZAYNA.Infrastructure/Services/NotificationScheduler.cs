@@ -55,7 +55,7 @@ namespace ZAYNA.Infrastructure.Services
                     b.StartTime <= reminderTime.AddMinutes(15).TimeOfDay &&
                     b.Status == BookingStatus.Confirmed &&
                     !context.Notifications.Any(n => 
-                        n.Type == "BookingReminder" && 
+                        n.Type.Equals("BookingReminder") && 
                         n.Message.Contains(b.BookingNumber)))
                 .ToListAsync();
 

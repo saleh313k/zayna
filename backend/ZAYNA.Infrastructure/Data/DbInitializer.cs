@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using ZAYNA.Core.Entities;
 using ZAYNA.Infrastructure.Data;
+using ZAYNA.Core.Enums;
 
 namespace ZAYNA.Infrastructure.Data
 {
@@ -81,9 +82,8 @@ namespace ZAYNA.Infrastructure.Data
                 AddressLine = "Al Khuwair, Muscat",
                 City = "Muscat",
                 Region = "Muscat Governorate",
-                Latitude = 23.5880m,
-                Longitude = 58.3829m,
-                PhoneNumber = "+96887654321",
+                Latitude = (double)23.5880m,
+                Longitude =(double) 58.3829m,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -101,7 +101,7 @@ namespace ZAYNA.Infrastructure.Data
                     workingHours.Add(new BranchWorkingHours
                     {
                         BranchId = branch.Id,
-                        DayOfWeek = day,
+                        DayOfWeek = (System.DayOfWeek)day,
                         OpenTime = TimeSpan.FromHours(9),
                         CloseTime = TimeSpan.FromHours(21),
                         IsClosed = true
@@ -112,7 +112,7 @@ namespace ZAYNA.Infrastructure.Data
                     workingHours.Add(new BranchWorkingHours
                     {
                         BranchId = branch.Id,
-                        DayOfWeek = day,
+                        DayOfWeek = (System.DayOfWeek)day,
                         OpenTime = TimeSpan.FromHours(9),
                         CloseTime = TimeSpan.FromHours(21),
                         IsClosed = false

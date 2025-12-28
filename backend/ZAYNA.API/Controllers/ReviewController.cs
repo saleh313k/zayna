@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using ZAYNA.Core.Entities;
+using ZAYNA.Core.Enums;
 using ZAYNA.Infrastructure.Data;
 
 namespace ZAYNA.API.Controllers

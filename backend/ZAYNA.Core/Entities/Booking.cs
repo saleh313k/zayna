@@ -15,6 +15,8 @@ namespace ZAYNA.Core.Entities
         public TimeSpan EndTime { get; set; }
         public BookingStatus Status { get; set; } = BookingStatus.Pending;
 
+        public PaymentType PaymentType { get; set; } 
+
         // Infrastructure expects TotalAmount and BookingNumber.
         // Keep existing TotalPrice for backward compatibility and sync with TotalAmount.
         public decimal TotalPrice { get; set; }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using ZAYNA.Core.Entities;
+using ZAYNA.Core.Enums;
 using ZAYNA.Core.Interfaces;
 
 namespace ZAYNA.API.Controllers
@@ -36,9 +37,9 @@ namespace ZAYNA.API.Controllers
         /// Get available time slots for a stylist on a specific date
         /// </summary>
         [HttpGet("available-slots")]
-        public async Task<IActionResult> GetAvailableSlots([FromQuery] Guid stylistId, [FromQuery] DateTime date)
+        public async Task<IActionResult> GetAvailableSlots([FromQuery] Guid stylistId,[FromQuery] Guid serviceId, [FromQuery] DateTime date)
         {
-            var slots = await _bookingService.GetAvailableTimeSlotsAsync(stylistId, date);
+            var slots = await _bookingService.GetAvailableTimeSlotsAsync(stylistId, serviceId, date);
             return Ok(new { success = true, slots });
         }
 
@@ -95,9 +96,7 @@ namespace ZAYNA.API.Controllers
             await _loyaltyService.AddPointsAsync(
                 request.CustomerId,
                 10,
-                "Earned",
-                $"Booking #{createdBooking.BookingNumber}",
-                createdBooking.Id);
+                $"Booking #{createdBooking.BookingNumber}");
 
             return Ok(new { success = true, booking = createdBooking });
         }
@@ -122,9 +121,9 @@ namespace ZAYNA.API.Controllers
         /// </summary>
         [Authorize(Roles = "Salon,Admin")]
         [HttpGet("salon/{salonId}")]
-        public async Task<IActionResult> GetSalonBookings(Guid salonId, [FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+        public async Task<IActionResult> GetSalonBookings(Guid salonId,[FromQuery] DateTime? date)
         {
-            var bookings = await _bookingService.GetSalonBookingsAsync(salonId, startDate, endDate);
+            var bookings = await _bookingService.GetSalonBookingsAsync(salonId, date);
             return Ok(new { success = true, bookings });
         }
 

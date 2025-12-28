@@ -4,6 +4,7 @@ namespace ZAYNA.Core.Entities
     {
         public Guid Id { get; set; }
         public Guid CustomerId { get; set; }
+        public Customer Customer { get; set; } = null!;
 
         public int Points { get; set; }
 

@@ -13,5 +13,10 @@ namespace ZAYNA.Core.Interfaces
         Task DeleteAsync(Guid id);
         Task<bool> ExistsAsync(Expression<Func<T, bool>> predicate);
         Task<int> CountAsync(Expression<Func<T, bool>> predicate);
+        Task<T?> FirstOrDefaultAsync(Expression<Func<T, bool>> predicate);
+        Task UpdateRangeAsync(IEnumerable<T> entities);
+        Task DeleteAsync(T entity);
+
+
     }
 }

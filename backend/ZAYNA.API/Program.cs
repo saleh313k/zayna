@@ -4,9 +4,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using Zayna.Core.Interfaces;
+using Zayna.Infrastructure.Data;
+using Zayna.Infrastructure.Services;
+using ZAYNA.Core.Entities;
+using ZAYNA.Core.Interfaces;
 using ZAYNA.Infrastructure.Data;
 using ZAYNA.Infrastructure.Services;
-using ZAYNA.Core.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,12 +101,14 @@ builder.Services.AddCors(options =>
 // Register Services
 builder.Services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<ISMSService, TwilioSMSService>();
+builder.Services.AddScoped<ISmsService, TwilioSmsService>();
 builder.Services.AddScoped<IEmailService, SendGridEmailService>();
 builder.Services.AddScoped<IPaymentService, ThawaniPaymentService>();
 builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
+builder.Services.AddScoped<IOtpService, OtpService>();
+
 
 // AutoMapper
 builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
@@ -147,52 +153,3 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
-// ZAYNA.API/appsettings.json
-/*
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Database=ZaynaDB;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true"
-  },
-  "JwtSettings": {
-    "SecretKey": "YourSuperSecretKeyForZAYNABookingSystem123!@#",
-    "Issuer": "ZAYNA.API",
-    "Audience": "ZAYNA.Client",
-    "ExpiryHours": 24
-  },
-  "TwilioSettings": {
-    "AccountSid": "your_twilio_account_sid",
-    "AuthToken": "your_twilio_auth_token",
-    "PhoneNumber": "+96812345678"
-  },
-  "SendGridSettings": {
-    "ApiKey": "your_sendgrid_api_key",
-    "FromEmail": "noreply@zayna.om",
-    "FromName": "ZAYNA Booking"
-  },
-  "ThawaniSettings": {
-    "ApiKey": "your_thawani_api_key",
-    "SecretKey": "your_thawani_secret_key",
-    "BaseUrl": "https://uatcheckout.thawani.om/api/v1",
-    "PublishableKey": "your_publishable_key"
-  },
-  "GoogleMapsSettings": {
-    "ApiKey": "your_google_maps_api_key"
-  },
-  "AppSettings": {
-    "FileUploadPath": "wwwroot/uploads",
-    "MaxFileSize": 5242880,
-    "AllowedImageExtensions": [".jpg", ".jpeg", ".png", ".gif"],
-    "OTPExpiryMinutes": 5,
-    "BookingReminderHours": 2,
-    "LoyaltyPointsPerBooking": 10,
-    "LoyaltyPointsValue": 0.1
-  },
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*"
-}
-*/

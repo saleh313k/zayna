@@ -76,7 +76,7 @@ namespace ZAYNA.API.Controllers
         /// </summary>
         [AllowAnonymous]
         [HttpGet("nearby")]
-        public async Task<IActionResult> GetNearbyBranches([FromQuery] decimal latitude, [FromQuery] decimal longitude, [FromQuery] int radiusKm = 10)
+        public async Task<IActionResult> GetNearbyBranches([FromQuery] double latitude, [FromQuery] double longitude, [FromQuery] int radiusKm = 10)
         {
             // Simple distance calculation (for production, use proper geospatial queries)
             var branches = await _context.Branches
@@ -110,7 +110,7 @@ namespace ZAYNA.API.Controllers
             return Ok(new { success = true, branches = nearbyBranches });
         }
 
-        private double CalculateDistance(decimal lat1, decimal lon1, decimal lat2, decimal lon2)
+        private double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
         {
             // Haversine formula
             var R = 6371; // Radius of the Earth in km
@@ -129,5 +129,5 @@ namespace ZAYNA.API.Controllers
         }
     }
 
-    public record WorkingHoursRequest(int DayOfWeek, TimeSpan OpenTime, TimeSpan CloseTime, bool IsClosed);
+    public record WorkingHoursRequest(DayOfWeek DayOfWeek, TimeSpan OpenTime, TimeSpan CloseTime, bool IsClosed);
 }

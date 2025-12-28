@@ -225,7 +225,7 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.StylistId)
                 .OnDelete(DeleteBehavior.Cascade);
             
-            entity.HasIndex(e => new { e.StylistId, e.Date });
+            entity.HasIndex(e => new { e.StylistId, e.OffDate });
         });
 
         // OTPVerification

@@ -22,7 +22,7 @@ namespace ZAYNA.Infrastructure.Services
         public async Task<int> GetCustomerPointsAsync(Guid customerId)
         {
             var customer = await _customerRepository.GetByIdAsync(customerId);
-            return customer?.LoyaltyPoints ?? 0;
+            return customer?.LoyaltyPointsHistory.Count ?? 0;
         }
 
         // ================================
@@ -33,7 +33,7 @@ namespace ZAYNA.Infrastructure.Services
             var customer = await _customerRepository.GetByIdAsync(customerId);
             if (customer == null) return;
 
-            customer.LoyaltyPoints += points;
+            customer.LoyaltyPointsBalance += points;
             await _customerRepository.UpdateAsync(customer);
 
             await _loyaltyHistoryRepository.AddAsync(new LoyaltyPointsHistory
@@ -53,9 +53,9 @@ namespace ZAYNA.Infrastructure.Services
             var customer = await _customerRepository.GetByIdAsync(customerId);
             if (customer == null) return;
 
-            customer.LoyaltyPoints -= points;
-            if (customer.LoyaltyPoints < 0)
-                customer.LoyaltyPoints = 0;
+            customer.LoyaltyPointsBalance -= points;
+            if (customer.LoyaltyPointsBalance < 0)
+                customer.LoyaltyPointsBalance = 0;
 
             await _customerRepository.UpdateAsync(customer);
 
@@ -76,7 +76,7 @@ namespace ZAYNA.Infrastructure.Services
             var customer = await _customerRepository.GetByIdAsync(customerId);
             if (customer == null) return false;
 
-            return customer.LoyaltyPoints >= points;
+            return customer.LoyaltyPointsBalance >= points;
         }
     }
 }

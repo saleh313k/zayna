@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ZAYNA.Core.Entities;
+using ZAYNA.Core.Enums;
 using ZAYNA.Core.Interfaces;
 using ZAYNA.Infrastructure.Data;
 
@@ -229,8 +230,8 @@ namespace ZAYNA.API.Controllers
         string City,
         string Region,
         string PostalCode,
-        decimal? Latitude,
-        decimal? Longitude,
+        double? Latitude,
+        double? Longitude,
         string PhoneNumber);
 
     public record UpdateBranchRequest(
@@ -246,6 +247,6 @@ namespace ZAYNA.API.Controllers
         string FullName,
         string FullNameAr,
         Guid? BranchId,
-        int? YearsOfExperience);
+        int YearsOfExperience);
 }
 

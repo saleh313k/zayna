@@ -6,25 +6,25 @@ namespace Zayna.Core.DTOs
 {
     public class CreateStylistDto
     {
-        public string PhoneNumber { get; set; }
-        public string FullName { get; set; }
-        public string FullNameAr { get; set; }
-        public string Email { get; set; }
+        public required string PhoneNumber { get; set; }
+        public required string FullName { get; set; }
+        public required string FullNameAr { get; set; }
+        public required string Email { get; set; }
         public Guid? BranchId { get; set; }
-        public string Bio { get; set; }
-        public string BioAr { get; set; }
-        public int YearsOfExperience { get; set; }
-        public List<Guid> ServiceIds { get; set; }
+        public required string Bio { get; set; }
+        public required string BioAr { get; set; }
+        public required int YearsOfExperience { get; set; }
+        public required List<Guid> ServiceIds { get; set; }
     }
 
     public class StylistDto
     {
         public Guid Id { get; set; }
-        public string FullName { get; set; }
-        public string FullNameAr { get; set; }
-        public string Bio { get; set; }
-        public string AvatarUrl { get; set; }
-        public int YearsOfExperience { get; set; }
-        public List<ServiceDto> Services { get; set; }
+        public required string FullName { get; set; }
+        public required string FullNameAr { get; set; }
+        public required string Bio { get; set; }
+        public required string AvatarUrl { get; set; }
+        public required int YearsOfExperience { get; set; }
+        public required List<ServiceDto> Services { get; set; }
     }
 }

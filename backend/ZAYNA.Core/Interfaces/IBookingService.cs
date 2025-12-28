@@ -6,8 +6,7 @@
 
         public interface IBookingService
         {
-            Task<Booking> CreateBookingAsync(Guid customerId, Guid salonId, Guid branchId,
-                Guid stylistId, Guid serviceId, DateTime bookingDate, TimeSpan startTime, string? notes);
+            Task<Booking> CreateBookingAsync(Booking booking);
             Task<Booking?> GetBookingByIdAsync(Guid id);
             Task<IEnumerable<Booking>> GetCustomerBookingsAsync(Guid customerId);
             Task<IEnumerable<Booking>> GetSalonBookingsAsync(Guid salonId, DateTime? date = null);

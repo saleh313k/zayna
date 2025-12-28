@@ -6,6 +6,7 @@ namespace ZAYNA.Core.Entities
     {
         public Guid Id { get; set; }
         public Guid? BookingId { get; set; }
+        public Booking Booking { get; set; } = null!;
         public Guid? UserId { get; set; }
 
         public string? Title { get; set; }
@@ -16,5 +17,6 @@ namespace ZAYNA.Core.Entities
         public NotificationType Type { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public bool IsRead { get; set; }
     }
 }

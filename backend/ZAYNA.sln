@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26124.0
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11222.15 d18.0
 MinimumVisualStudioVersion = 15.0.26124.0
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZAYNA.API", "ZAYNA.API\ZAYNA.API.csproj", "{0BDE6344-A8E2-435F-AA91-CC2B89829313}"
 EndProject
@@ -19,9 +19,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 		Release|x64 = Release|x64
 		Release|x86 = Release|x86
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{0BDE6344-A8E2-435F-AA91-CC2B89829313}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -72,5 +69,11 @@ Global
 		{60C213E3-7663-42C6-AB1A-D883B18DCA7B}.Release|x64.Build.0 = Release|Any CPU
 		{60C213E3-7663-42C6-AB1A-D883B18DCA7B}.Release|x86.ActiveCfg = Release|Any CPU
 		{60C213E3-7663-42C6-AB1A-D883B18DCA7B}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0EA0C9AE-FFF5-4E3B-8E8C-9CBF5FC2C6A2}
 	EndGlobalSection
 EndGlobal

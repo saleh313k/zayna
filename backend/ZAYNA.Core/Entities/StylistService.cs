@@ -9,5 +9,6 @@ namespace ZAYNA.Core.Entities
         // Navigation properties
         public Stylist Stylist { get; set; } = null!;
         public Service Service { get; set; } = null!;
+
     }
 }

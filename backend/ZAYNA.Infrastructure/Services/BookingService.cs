@@ -1,8 +1,6 @@
 using ZAYNA.Infrastructure.Data;
 using ZAYNA.Core.Enums;
-using ZAYNA.Core.Entities;
-using ZAYNA.Core.Interfaces;
-using Microsoft.EntityFrameworkCore;
+
 
 namespace ZAYNA.Infrastructure.Services
 {
@@ -30,31 +28,12 @@ namespace ZAYNA.Infrastructure.Services
         // -------------------------
 
         public async Task<Booking> CreateBookingAsync(
-            Guid customerId,
-            Guid salonId,
-            Guid branchId,
-            Guid stylistId,
-            Guid serviceId,
-            DateTime bookingDate,
-            TimeSpan startTime,
-            string? notes)
+            Booking booking)
         {
-            var booking = new Booking
-            {
-                Id = Guid.NewGuid(),
-                CustomerId = customerId,
-                SalonId = salonId,
-                BranchId = branchId,
-                StylistId = stylistId,
-                ServiceId = serviceId,
-                BookingDate = bookingDate.Date,
-                StartTime = startTime,
-                EndTime = startTime.Add(TimeSpan.FromMinutes(30)),
-                Notes = notes,
-                Status = BookingStatus.Pending,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+            booking.Status = BookingStatus.Pending;
+            booking.CreatedAt = DateTime.UtcNow;
+            booking.UpdatedAt = DateTime.UtcNow;
+
 
             return await _bookingRepository.AddAsync(booking);
         }
@@ -147,7 +126,7 @@ namespace ZAYNA.Infrastructure.Services
             if (stylist?.Branch == null) return availableSlots;
 
             var workingHours = stylist.Branch.WorkingHours
-                .FirstOrDefault(w => w.DayOfWeek == (int)date.DayOfWeek);
+                .FirstOrDefault(w => (int)w.DayOfWeek == (int)date.DayOfWeek);
 
             if (workingHours == null || workingHours.IsClosed) return availableSlots;
 

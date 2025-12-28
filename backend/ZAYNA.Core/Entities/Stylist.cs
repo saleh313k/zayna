@@ -9,9 +9,14 @@ namespace ZAYNA.Core.Entities
         public Guid? BranchId { get; set; }
         public string? Bio { get; set; }
         public string? BioAr { get; set; }
+        public required string FullName { get; set; }
+        public required string FullNameAr { get; set; }
         public int YearsOfExperience { get; set; }
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+        public int TotalReviews { get; set; } = 0;
+        public decimal Rating { get; set; } = 5.0m;
 
         // Navigation properties
         public User User { get; set; } = null!;

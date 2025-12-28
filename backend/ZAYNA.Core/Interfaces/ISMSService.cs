@@ -1,10 +1,12 @@
+// Zayna.Core/Interfaces/ISmsService.cs
 using System.Threading.Tasks;
 
-namespace ZAYNA.Core.Interfaces
+namespace Zayna.Core.Interfaces
 {
-    public interface ISMSService
+    public interface ISmsService
     {
-        // Infrastructure expects SendSMSAsync
-        Task SendSMSAsync(string phoneNumber, string message);
+        Task<bool> SendAsync(string phoneNumber, string message);
+        Task<bool> SendBookingConfirmationAsync(string phoneNumber, string bookingDetails);
+        Task<bool> SendReminderAsync(string phoneNumber, string message);
     }
 }
