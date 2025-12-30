@@ -19,24 +19,24 @@ import SalonDashboard from './components/salon/Dashboard';
 import AdminDashboard from './components/admin/Dashboard';
 
 // Protected Route Component
-const ProtectedRoute = ({ children, allowedRoles }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute = ({ children, allowedRoles }) => { //TODO: Protected routes
+  // const { user, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="spinner"></div>
-      </div>
-    );
-  }
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center">
+  //       <div className="spinner"></div>
+  //     </div>
+  //   );
+  // }
 
-  if (!user) {
-    return <Navigate to="/login" />;
-  }
+  // if (!user) {
+  //   return <Navigate to="/login" />;
+  // }
 
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/dashboard" />;
-  }
+  // if (allowedRoles && !allowedRoles.includes(user.role)) {
+  //   return <Navigate to="/dashboard" />;
+  // }
 
   return children;
 };
