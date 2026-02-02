@@ -15,7 +15,9 @@ const LanguageSwitcher = () => {
       aria-label="Toggle Language"
     >
       <FiGlobe />
-      <span className="font-medium">{language === 'en' ? 'العربية' : 'English'}</span>
+      <span className={`font-medium ${
+    language === 'en' ? 'font-arabic' : 'font-sans'
+  }`}>{language === 'en' ? 'العربية' : 'English'}</span>
     </button>
   );
 };
