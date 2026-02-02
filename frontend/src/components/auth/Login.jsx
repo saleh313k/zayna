@@ -8,6 +8,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services/authService';
 import { toast } from 'react-toastify';
 import { FiPhone, FiKey } from 'react-icons/fi';
+import Logo from "@/assets/img/logo.png";
+
 
 const Login = () => {
   const { t } = useTranslation();
@@ -43,11 +45,11 @@ const Login = () => {
       toast.success(t('auth.loginSuccess'));
       
       // Redirect based on role
-      if (response.role === 'Customer') {
+      if (response.role === 3) {
         navigate('/dashboard');
-      } else if (response.role === 'Salon') {
+      } else if (response.role === 1) {
         navigate('/salon/dashboard');
-      } else if (response.role === 'Admin') {
+      } else if (response.role === 0) {
         navigate('/admin/dashboard');
       }
     } catch (error) {
@@ -60,9 +62,15 @@ const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
       <div className="card max-w-md w-full">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">{t('brand.name')}</h1>
-          <p className="text-accent">{t('brand.slogan')}</p>
+        <div className="text-center mb-8 flex items-center justify-center">
+          {/* Logo */}
+          <Link to="/" className="flex items-center" onClick={() => setOpen(false)}>
+            <img
+              src={Logo}
+              alt="ZAYNA - Your Time to Shine"
+              className="h-20 w-auto object-contain"
+            />
+          </Link>
         </div>
 
         <h2 className="text-2xl font-semibold text-center mb-6">{t('auth.loginBtn')}</h2>

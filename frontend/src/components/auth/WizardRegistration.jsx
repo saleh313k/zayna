@@ -2,12 +2,14 @@
 // src/components/auth/WizardRegistration.jsx
 // ============================================
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { authService } from '../../services/authService';
 import { toast } from 'react-toastify';
 import { FiPhone, FiUser, FiMail, FiKey } from 'react-icons/fi';
+import Logo from "@/assets/img/logo.png";
+
 
 const WizardRegistration = () => {
   const { t } = useTranslation();
@@ -65,9 +67,14 @@ const WizardRegistration = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10 py-12">
       <div className="card max-w-2xl w-full">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-primary mb-2">{t('brand.name')}</h1>
-          <p className="text-accent">{t('brand.slogan')}</p>
+        <div className="text-center mb-8 flex items-center justify-center">
+          <Link to="/" className="flex items-center" onClick={() => setOpen(false)}>
+            <img
+              src={Logo}
+              alt="ZAYNA - Your Time to Shine"
+              className="h-20 w-auto object-contain"
+            />
+          </Link>
         </div>
 
         {/* Progress Steps */}
