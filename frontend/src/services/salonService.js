@@ -5,7 +5,7 @@ import api from './api';
 
 export const salonService = {
   getAllSalons: async (page = 1, pageSize = 20) => {
-    const response = await api.get('/salon', { params: { page, pageSize } });
+    const response = await api.get('/salon', { params: { page, pageSize } });    
     return response.data;
   },
 
@@ -15,7 +15,7 @@ export const salonService = {
   },
 
   getSalonServices: async (id) => {
-    const response = await api.get(`/salon/${id}/services`);
+    const response = await api.get(`service/salon/${id}`);
     return response.data;
   },
 

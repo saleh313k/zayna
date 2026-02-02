@@ -53,7 +53,7 @@ const BookingFlow = () => {
   const fetchSalons = async () => {
     try {
       const data = await salonService.getAllSalons();
-      setSalons(data);
+      setSalons(data.salons);
     } catch (error) {
       console.error(error);
     }
@@ -67,9 +67,9 @@ const BookingFlow = () => {
         salonService.getSalonStylists(salonId)
       ]);
 
-      setBranches(salonData.branches || []);
-      setServices(servicesData);
-      setStylists(stylistsData);
+      setBranches(salonData.salon.branches || []);
+      setServices(servicesData.services);
+      setStylists(stylistsData.stylists);
     } catch (error) {
       console.error(error);
     }

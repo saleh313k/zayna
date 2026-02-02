@@ -21,7 +21,7 @@ const CustomerDashboard = () => {
   const fetchBookings = async () => {
     try {
       const data = await bookingService.getMyBookings();
-      setBookings(data);
+      setBookings(data.bookings);
     } catch (error) {
       console.error('Error fetching bookings:', error);
     } finally {

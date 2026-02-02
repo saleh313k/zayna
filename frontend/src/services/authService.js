@@ -4,8 +4,8 @@
 import api from './api';
 
 export const authService = {
-  sendOtp: async (phoneNumber, purpose = 'Login') => {
-    const response = await api.post('/auth/send-otp', { phoneNumber, purpose });
+  sendOtp: async (phoneNumber, OTPPurpose = 'Login') => {
+    const response = await api.post('/Auth/send-otp', { phoneNumber, OTPPurpose });
     return response.data;
   },
 
@@ -19,8 +19,8 @@ export const authService = {
     return response.data;
   },
 
-  login: async (phoneNumber, otpCode) => {
-    const response = await api.post('/auth/login', { phoneNumber, otpCode });
+  login: async (phoneNumber, code) => {
+    const response = await api.post('/auth/login', { phoneNumber, code });
     return response.data;
   },
 

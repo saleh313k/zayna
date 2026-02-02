@@ -20,8 +20,8 @@ const SalonList = () => {
 
   const fetchSalons = async () => {
     try {
-      const data = await salonService.getAllSalons();
-      setSalons(data);
+      const data = await salonService.getAllSalons();     
+      setSalons(data.salons);
     } catch (error) {
       console.error('Error fetching salons:', error);
     } finally {
