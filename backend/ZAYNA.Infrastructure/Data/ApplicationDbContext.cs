@@ -1,6 +1,7 @@
 // ============================================
 // ZAYNA.Infrastructure/Data/ApplicationDbContext.cs
 // ============================================
+using Core.Entities;
 using Microsoft.EntityFrameworkCore;
 using ZAYNA.Core.Entities;
 
@@ -28,6 +29,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<StylistOffDay> StylistOffDays { get; set; }
     public DbSet<OTPVerification> OTPVerifications { get; set; }
     public DbSet<SocialAuthProvider> SocialAuthProviders { get; set; }
+    public DbSet<PublicSalon> PublicSalons => Set<PublicSalon>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

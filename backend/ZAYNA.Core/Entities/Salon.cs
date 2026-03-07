@@ -10,6 +10,7 @@ namespace ZAYNA.Core.Entities
         public string? SalonNameAr { get; set; }
         public string? AboutText { get; set; }
         public string? AboutTextAr { get; set; }
+        //public string? LogoUrl { get; set; }
         public string? ContactPhone { get; set; }
         public string? ContactEmail { get; set; }
         public string? FacebookUrl { get; set; }

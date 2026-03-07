@@ -3,7 +3,9 @@
 // ============================================
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './routes/ProtectedRoute';
+import { ROLES } from './constants/roles';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -17,29 +19,11 @@ import BookingFlow from './components/customer/BookingFlow';
 import BookingDetails from './components/customer/BookingDetails';
 import SalonDashboard from './components/salon/Dashboard';
 import AdminDashboard from './components/admin/Dashboard';
+import Reports from './components/admin/Reports';
+import Users from './components/admin/Users';
+import ComingSoon from './components/common/ComingSoon';
+import ClaimSalon from './components/claim/ClaimSalon';
 
-// Protected Route Component
-const ProtectedRoute = ({ children, allowedRoles }) => { //TODO: Protected routes
-  // const { user, loading } = useAuth();
-
-  // if (loading) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center">
-  //       <div className="spinner"></div>
-  //     </div>
-  //   );
-  // }
-
-  // if (!user) {
-  //   return <Navigate to="/login" />;
-  // }
-
-  // if (allowedRoles && !allowedRoles.includes(user.role)) {
-  //   return <Navigate to="/dashboard" />;
-  // }
-
-  return children;
-};
 
 function App() {
   return (
@@ -52,12 +36,14 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<WizardRegistration />} />
               <Route path="/salons" element={<SalonList />} />
+              <Route path="/comingsoon" element={<ComingSoon />} />
+              <Route path="/claim/:salonId" element={<ClaimSalon />} />
 
               {/* Customer Routes */}
               <Route
                 path="/dashboard"
                 element={
-                  <ProtectedRoute allowedRoles={['Customer']}>
+                  <ProtectedRoute allowedRoles={[ROLES.CUSTOMER]}>
                     <CustomerDashboard />
                   </ProtectedRoute>
                 }
@@ -65,7 +51,7 @@ function App() {
               <Route
                 path="/book"
                 element={
-                  <ProtectedRoute allowedRoles={['Customer']}>
+                  <ProtectedRoute allowedRoles={[ROLES.CUSTOMER]}>
                     <BookingFlow />
                   </ProtectedRoute>
                 }
@@ -73,7 +59,7 @@ function App() {
               <Route
                 path="/booking/:id"
                 element={
-                  <ProtectedRoute allowedRoles={['Customer']}>
+                  <ProtectedRoute allowedRoles={[ROLES.CUSTOMER]}>
                     <BookingDetails />
                   </ProtectedRoute>
                 }
@@ -83,7 +69,7 @@ function App() {
               <Route
                 path="/salon/dashboard"
                 element={
-                  <ProtectedRoute allowedRoles={['Salon']}>
+                  <ProtectedRoute allowedRoles={[ROLES.SALON]}>
                     <SalonDashboard />
                   </ProtectedRoute>
                 }
@@ -93,8 +79,24 @@ function App() {
               <Route
                 path="/admin/dashboard"
                 element={
-                  <ProtectedRoute allowedRoles={['Admin']}>
+                  <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                     <AdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/Reports"
+                element={
+                  <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                    <Reports />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/Users"
+                element={
+                  <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                    <Users />
                   </ProtectedRoute>
                 }
               />

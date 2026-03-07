@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using ZAYNA.Core.Enums;
 namespace ZAYNA.Core.Entities { 
 

@@ -1,6 +1,3 @@
-// ============================================
-// src/contexts/AuthContext.jsx
-// ============================================
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { authService } from '../services/authService';
 
@@ -11,41 +8,56 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-    
-    if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
+    try {
+      const storedUser = localStorage.getItem('user');
+      const token = localStorage.getItem('token');
+
+      if (storedUser && token) {
+        const parsed = JSON.parse(storedUser);
+
+        if (parsed?.userId && typeof parsed?.role === 'number') {
+          setUser(parsed);
+        } else {
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+        }
+      }
+    } catch {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  const login = async (phoneNumber, otpCode) => {
-    const response = await authService.login(phoneNumber, otpCode);
+  const persistAuth = (response) => {
     localStorage.setItem('token', response.token);
     localStorage.setItem('user', JSON.stringify(response));
     setUser(response);
+  };
+
+  const login = async (phoneNumber, otpCode) => {
+    const response = await authService.login(phoneNumber, otpCode);
+    persistAuth(response);
     return response;
   };
 
   const register = async (data) => {
     const response = await authService.register(data);
-    localStorage.setItem('token', response.token);
-    localStorage.setItem('user', JSON.stringify(response));
-    setUser(response);
+    persistAuth(response);
     return response;
   };
 
   const socialLogin = async (provider, accessToken, email, fullName, externalId) => {
     const response = await authService.socialLogin(provider, accessToken, email, fullName, externalId);
-    localStorage.setItem('token', response.token);
-    localStorage.setItem('user', JSON.stringify(response));
-    setUser(response);
+    persistAuth(response);
     return response;
   };
 
   const logout = () => {
     authService.logout();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     setUser(null);
   };
 

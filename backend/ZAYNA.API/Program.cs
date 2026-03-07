@@ -4,9 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
+using System.Text.Json.Serialization;
 using Zayna.Core.Interfaces;
 using Zayna.Infrastructure.Data;
 using Zayna.Infrastructure.Services;
+using ZAYNA.API.Middlewares;
 using ZAYNA.Core.Entities;
 using ZAYNA.Core.Interfaces;
 using ZAYNA.Infrastructure.Data;
@@ -17,6 +19,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+//builder.Services.AddControllersWithViews().AddJsonOptions(options =>
+//{
+//    options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.Preserve;
+//});
+
 
 // Swagger Configuration
 builder.Services.AddSwaggerGen(c =>
@@ -60,7 +68,7 @@ builder.Services.AddSwaggerGen(c =>
 
 // Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("saleh"),b=> b.MigrationsAssembly("ZAYNA.API")));
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
@@ -108,6 +116,7 @@ builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
+builder.Services.AddScoped<PublicSalonService>();
 
 
 // AutoMapper
@@ -134,7 +143,7 @@ app.UseCors("AllowReactApp");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-
+app.UseMiddleware<GlobalExceptionMiddleware>();
 // Seed database
 using (var scope = app.Services.CreateScope())
 {

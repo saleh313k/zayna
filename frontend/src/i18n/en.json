@@ -32,7 +32,8 @@
     "otpSent": "OTP sent successfully",
     "otpVerified": "OTP verified",
     "loginSuccess": "Login successful",
-    "registerSuccess": "Registration successful"
+    "registerSuccess": "Registration successful",
+    "loginToView" : "Login To View"
   },
   "wizard": {
     "step1": "Select User Type",
@@ -65,7 +66,13 @@
     "addBranch": "Add Branch",
     "addStylist": "Add Stylist",
     "addService": "Add Service",
-    "manageSchedule": "Manage Schedule"
+    "manageSchedule": "Manage Schedule",
+    "areYouTheOwner":"Are You The Owner?",
+    "claim" : "Claim It Now",
+    "unclaimed" : "Call to Book",
+    "verified":"Verified",
+    "callToBookTooltip" : "Online booking not available. Please call to book",
+    "clickToShowNumber" : "Click to Show"
   },
   "booking": {
     "selectSalon": "Select Salon",

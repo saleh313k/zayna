@@ -8,9 +8,18 @@ export const salonService = {
     const response = await api.get('/salon', { params: { page, pageSize } });    
     return response.data;
   },
+  getAllPublicSalons: async () => {
+    const response = await api.get('/publicSalons');    
+    return response.data;
+  },
 
   getSalonById: async (id) => {
-    const response = await api.get(`/salon/${id}`);
+    const response = await api.get(`/publicSalons/${id}`);
+    return response.data;
+  },
+
+  getPublicSalonById: async (id) => {
+    const response = await api.get(`/publicSalons/${id}`);
     return response.data;
   },
 
@@ -36,9 +45,18 @@ export const getAllSalons = async (city = null) => {
   const response = await api.get(url);
   return response.data;
 };
+export const getAllPublicSalons = async () => {
+  const response = await api.get('/PublicSalons');
+  return response.data;
+};
 
 export const getSalonById = async (salonId) => {
   const response = await api.get(`/Salon/${salonId}`);
+  return response.data;
+};
+
+export const getPublicSalonById = async (salonId) => {
+  const response = await api.get(`/publicSalons/${salonId}`);
   return response.data;
 };
 

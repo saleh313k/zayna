@@ -1,7 +1,9 @@
-// ZAYNA.API/Controllers/SalonController.cs
+﻿// ZAYNA.API/Controllers/SalonController.cs
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
+using Zayna.Core.DTOs;
 using ZAYNA.Core.Entities;
 using ZAYNA.Core.Enums;
 using ZAYNA.Core.Interfaces;
@@ -36,21 +38,50 @@ namespace ZAYNA.API.Controllers
         /// </summary>
         [AllowAnonymous]
         [HttpGet]
-        public async Task<IActionResult> GetAllSalons([FromQuery] string city = null)
+        public async Task<IActionResult> GetAllSalons([FromQuery] string? city = null)
         {
-            var salons = await _context.Salons
-                .Include(s => s.Branches)
-                .Where(s => s.IsVerified)
-                .ToListAsync();
+            var query = _context.Salons
+                .Where(s => s.IsVerified);
 
             if (!string.IsNullOrEmpty(city))
             {
-                salons = salons.Where(s => s.Branches.Any(b => b.City.Equals(city, StringComparison.OrdinalIgnoreCase)))
-                    .ToList();
+                query = query.Where(s =>
+                    s.Branches.Any(b => b.City != null &&
+                        b.City.Equals(city, StringComparison.OrdinalIgnoreCase)));
             }
+
+            var salons = await query
+                .Select(s => new SalonDto
+                {
+                    Id = s.Id,
+                    Name = s.SalonName ?? "",
+                    NameAr = s.SalonNameAr ?? "",
+                    Description = s.AboutText ?? "",
+                    DescriptionAr = s.AboutTextAr ?? "",
+                    LogoUrl = "",
+                    PhoneNumber = s.ContactPhone ?? "",
+                    Email = s.ContactEmail ?? "",
+                    IsActive = s.IsVerified,
+
+                    Branches = s.Branches
+                        .Where(b => b.IsActive)
+                        .Select(b => new BranchDto
+                        {
+                            Id = b.Id,
+                            Name = b.BranchName ?? "",
+                            NameAr = b.BranchNameAr ?? "",
+                            Address = b.AddressLine ?? "",
+                            AddressAr = b.AddressLine ?? "",
+                            Latitude = b.Latitude ?? 0,
+                            Longitude = b.Longitude ?? 0
+                        })
+                        .ToList()
+                })
+                .ToListAsync();
 
             return Ok(new { success = true, salons });
         }
+
 
         /// <summary>
         /// Get salon by ID
@@ -59,12 +90,41 @@ namespace ZAYNA.API.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetSalonById(Guid id)
         {
+            //var salon = await _context.Salons
+            //    .Include(s => s.Branches)
+            //        .ThenInclude(b => b.WorkingHours)
+            //    .Include(s => s.Services)
+            //    .Include(s => s.Stylists)
+            //    .FirstOrDefaultAsync(s => s.Id == id);
             var salon = await _context.Salons
-                .Include(s => s.Branches)
-                    .ThenInclude(b => b.WorkingHours)
-                .Include(s => s.Services)
-                .Include(s => s.Stylists)
-                .FirstOrDefaultAsync(s => s.Id == id);
+    .Where(s => s.IsVerified && s.Id == id)
+    .Select(s => new SalonDto
+    {
+        Id = s.Id,
+        Name = s.SalonName ?? "",
+        NameAr = s.SalonNameAr ?? "",
+        Description = s.AboutText ?? "",
+        DescriptionAr = s.AboutTextAr ?? "",
+        LogoUrl = "", // اگر داری پرش کن
+        PhoneNumber = s.ContactPhone ?? "",
+        Email = s.ContactEmail ?? "",
+        IsActive = s.IsVerified,
+
+        Branches = s.Branches
+            .Where(b => b.IsActive)
+            .Select(b => new BranchDto
+            {
+                Id = b.Id,
+                Name = b.BranchName ?? "",
+                NameAr = b.BranchNameAr ?? "",
+                Address = b.AddressLine ?? "",
+                AddressAr = b.AddressLine ?? "",
+                Latitude = b.Latitude ?? 0,
+                Longitude = b.Longitude ?? 0
+            })
+            .ToList()
+    })
+    .FirstOrDefaultAsync();
 
             if (salon == null)
                 return NotFound(new { success = false, message = "Salon not found" });

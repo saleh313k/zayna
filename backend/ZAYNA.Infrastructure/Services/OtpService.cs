@@ -65,37 +65,38 @@ public class OtpService : IOtpService
     // ============================
     public async Task<bool> VerifyOtpAsync(string phoneNumber, string code, OTPPurpose purpose)
     {
-        // 1️⃣ پیدا کردن آخرین OTP معتبر
-        var otp = await _otpRepository.FirstOrDefaultAsync(x =>
-            x.PhoneNumber == phoneNumber &&
-            x.Purpose == purpose &&
-            !x.IsUsed);
+        //// 1️⃣ پیدا کردن آخرین OTP معتبر
+        //var otp = await _otpRepository.FirstOrDefaultAsync(x =>
+        //    x.PhoneNumber == phoneNumber &&
+        //    x.Purpose == purpose &&
+        //    !x.IsUsed);
 
-        if (otp == null)
-            return false;
+        //if (otp == null)
+        //    return false;
 
-        // 2️⃣ بررسی انقضا
-        if (otp.ExpiresAt < DateTime.UtcNow)
-            return false;
+        //// 2️⃣ بررسی انقضا
+        //if (otp.ExpiresAt < DateTime.UtcNow)
+        //    return false;
 
-        // 3️⃣ بررسی تعداد تلاش
-        if (otp.AttemptCount >= MaxVerifyAttempts)
-            return false;
+        //// 3️⃣ بررسی تعداد تلاش
+        //if (otp.AttemptCount >= MaxVerifyAttempts)
+        //    return false;
 
-        // 4️⃣ افزایش شمارنده تلاش
-        otp.AttemptCount++;
+        //// 4️⃣ افزایش شمارنده تلاش
+        //otp.AttemptCount++;
 
-        // 5️⃣ بررسی کد
-        if (otp.Code != code)
-        {
-            await _otpRepository.UpdateAsync(otp);
-            return false;
-        }
+        //// 5️⃣ بررسی کد
+        //if (otp.Code != code)
+        //{
+        //    await _otpRepository.UpdateAsync(otp);
+        //    return false;
+        //}
 
-        // 6️⃣ موفق → مصرف OTP
-        otp.IsUsed = true;
-        await _otpRepository.UpdateAsync(otp);
-
+        //// 6️⃣ موفق → مصرف OTP
+        //otp.IsUsed = true;
+        //await _otpRepository.UpdateAsync(otp);
+        
+        //TODO: uncomment this lines before publish 
         return true;
     }
 
@@ -104,8 +105,9 @@ public class OtpService : IOtpService
     // ============================
     private static string GenerateSecureOtp()
     {
-        return RandomNumberGenerator
-            .GetInt32(100000, 999999)
-            .ToString();
+        return "123";
+        //return RandomNumberGenerator
+        //    .GetInt32(100000, 999999)
+        //    .ToString();
     }
 }

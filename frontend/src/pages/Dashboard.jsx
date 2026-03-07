@@ -12,13 +12,13 @@ export default function Dashboard() {
 
   const getDashboardComponent = () => {
     switch (user?.role) {
-      case 'Customer':
+      case 3:
         return <CustomerDashboard />;
-      case 'Salon':
+      case 1:
         return <SalonDashboard />;
-      case 'Stylist':
+      case 2:
         return <StylistDashboard />;
-      case 'Admin':
+      case 0:
         return <AdminDashboard />;
       default:
         return <div>Unknown role</div>;

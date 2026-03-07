@@ -53,6 +53,8 @@ const Login = () => {
         navigate('/admin/dashboard');
       }
     } catch (error) {
+      console.log(error.response?.data);
+      
       toast.error(error.response?.data?.message || t('common.error'));
     } finally {
       setLoading(false);

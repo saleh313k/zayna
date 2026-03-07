@@ -10,9 +10,9 @@ public class TwilioSmsService : ISmsService
 
     public TwilioSmsService(IConfiguration config)
     {
-        _accountSid = config["Twilio:AccountSid"]!;
-        _authToken = config["Twilio:AuthToken"]!;
-        _fromNumber = config["Twilio:FromNumber"]!;
+        _accountSid = config["Twilio:AccountSid"]! ?? "";
+        _authToken = config["Twilio:AuthToken"]! ?? "";
+        _fromNumber = config["Twilio:FromNumber"]! ?? "";
 
         TwilioClient.Init(_accountSid, _authToken);
     }

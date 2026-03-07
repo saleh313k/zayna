@@ -44,7 +44,7 @@ namespace Zayna.Core.DTOs
 
     public class SendOtpDto
     {
-        public string PhoneNumber { get; set; } = string.Empty;
+        public required string PhoneNumber { get; set; } 
         public OTPPurpose Purpose { get; set; }
     }
 

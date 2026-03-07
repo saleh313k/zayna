@@ -38,7 +38,7 @@ export default function Sidebar() {
   const items = menuItems[user?.role] || [];
 
   return (
-    <>
+    <div>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="lg:hidden fixed top-4 left-4 z-50 p-2 bg-emerald-green text-white rounded-lg"
@@ -79,6 +79,6 @@ export default function Sidebar() {
           </button>
         </div>
       </aside>
-    </>
+    </div>
   );
 }
