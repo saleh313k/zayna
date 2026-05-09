@@ -1,0 +1,157 @@
+{
+  "brand": {
+    "name": "ZAYNA",
+    "slogan": "Your Time to Shine"
+  },
+  "nav": {
+    "home": "Home",
+    "salons": "Salons",
+    "bookings": "My Bookings",
+    "profile": "Profile",
+    "dashboard": "Dashboard",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout"
+  },
+  "auth": {
+    "phoneNumber": "Phone Number",
+    "enterPhone": "Enter your phone number",
+    "sendOtp": "Send OTP",
+    "verifyOtp": "Verify OTP",
+    "enterOtp": "Enter OTP code",
+    "fullName": "Full Name",
+    "email": "Email Address",
+    "chooseRole": "I am a",
+    "customer": "Customer",
+    "salon": "Salon Owner",
+    "registerBtn": "Register",
+    "loginBtn": "Login",
+    "alreadyAccount": "Already have an account?",
+    "noAccount": "Don't have an account?",
+    "orContinueWith": "Or continue with",
+    "otpSent": "OTP sent successfully",
+    "otpVerified": "OTP verified",
+    "loginSuccess": "Login successful",
+    "registerSuccess": "Registration successful",
+    "loginToView" : "Login To View"
+  },
+  "wizard": {
+    "step1": "Select User Type",
+    "step2": "Contact Information",
+    "step3": "Complete Profile",
+    "next": "Next",
+    "previous": "Previous",
+    "finish": "Finish"
+  },
+  "customer": {
+    "dashboard": "Dashboard",
+    "bookings": "My Bookings",
+    "profile": "My Profile",
+    "newBooking": "New Booking",
+    "upcomingBookings": "Upcoming Appointments",
+    "pastBookings": "Past Appointments",
+    "cancelBooking": "Cancel Booking",
+    "confirmCancel": "Are you sure you want to cancel this booking?",
+    "cancellationReason": "Cancellation Reason",
+    "loyaltyPoints": "Loyalty Points"
+  },
+  "salon": {
+    "dashboard": "Salon Dashboard",
+    "branches": "Branches",
+    "stylists": "Stylists",
+    "services": "Services",
+    "appointments": "Appointments",
+    "customers": "Customers",
+    "reports": "Reports",
+    "addBranch": "Add Branch",
+    "addStylist": "Add Stylist",
+    "addService": "Add Service",
+    "manageSchedule": "Manage Schedule",
+    "areYouTheOwner":"Are You The Owner?",
+    "claim" : "Claim It Now",
+    "unclaimed" : "Call to Book",
+    "verified":"Verified",
+    "callToBookTooltip" : "Online booking not available. Please call to book",
+    "clickToShowNumber" : "Click to Show",
+    "view_on_map": "View on Google Maps",
+    "map_cta": "Ready to visit {{name}}?"
+  },
+  "booking": {
+    "selectSalon": "Select Salon",
+    "selectBranch": "Select Branch",
+    "selectService": "Select Service",
+    "selectStylist": "Select Stylist",
+    "selectDate": "Select Date",
+    "selectTime": "Select Time",
+    "paymentMethod": "Payment Method",
+    "payOnline": "Pay Online",
+    "payInPerson": "Pay In Person",
+    "bookNow": "Book Now",
+    "bookingConfirmed": "Booking Confirmed",
+    "totalPrice": "Total Price",
+    "notes": "Additional Notes"
+  },
+  "status": {
+    "pending": "Pending",
+    "confirmed": "Confirmed",
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "noShow": "No Show"
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "search": "Search",
+    "filter": "Filter",
+    "export": "Export",
+    "loading": "Loading...",
+    "noData": "No data available",
+    "error": "An error occurred",
+    "success": "Success",
+    "confirm": "Confirm",
+    "viewDetails": "View Details",
+    "close": "Close"
+  }
+  ,
+  "footer": {
+    "copyright": "© {{year}} Zayna. All rights reserved.",
+    "contact": "Contact Us",
+    "report_bug": "Report a Bug",
+    "whatsapp_aria": "Contact us on WhatsApp",
+    "bug_modal": {
+      "title": "Report a Bug",
+      "subtitle": "Zayna",
+      "categories": {
+        "ui": "UI Issue",
+        "crash": "Crash",
+        "performance": "Slow / Performance",
+        "data": "Data Problem",
+        "other": "Other"
+      },
+      "fields": {
+        "category_label": "Category",
+        "title_label": "Issue Title",
+        "title_placeholder": "e.g. Submit button not working",
+        "description_label": "Description",
+        "description_placeholder": "What happened? What did you expect?",
+        "steps_label": "Steps to Reproduce (optional)",
+        "steps_placeholder": "1. Went to page X\n2. Clicked button Y\n3. Error appeared",
+        "name_label": "Name (optional)",
+        "name_placeholder": "Your name",
+        "email_label": "Email (optional)",
+        "email_placeholder": "For follow-up"
+      },
+      "required": "required",
+      "submit": "Submit Report",
+      "submitting": "Sending...",
+      "success_title": "Bug Reported Successfully!",
+      "success_message": "Thank you for your time. Our team will review it as soon as possible.",
+      "success_close": "Close",
+      "error_message": "Failed to send. Please check your connection and try again.",
+      "close_aria": "Close modal"
+    }
+  }
+
+}
