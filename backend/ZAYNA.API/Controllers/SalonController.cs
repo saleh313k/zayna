@@ -109,6 +109,50 @@ namespace ZAYNA.API.Controllers
         PhoneNumber = s.ContactPhone ?? "",
         Email = s.ContactEmail ?? "",
         IsActive = s.IsVerified,
+        UserId = s.UserId,
+
+        Branches = s.Branches
+            .Where(b => b.IsActive)
+            .Select(b => new BranchDto
+            {
+                Id = b.Id,
+                Name = b.BranchName ?? "",
+                NameAr = b.BranchNameAr ?? "",
+                Address = b.AddressLine ?? "",
+                AddressAr = b.AddressLine ?? "",
+                Latitude = b.Latitude ?? 0,
+                Longitude = b.Longitude ?? 0
+            })
+            .ToList()
+    })
+    .FirstOrDefaultAsync();
+
+            if (salon == null)
+                return NotFound(new { success = false, message = "Salon not found" });
+
+            return Ok(new { success = true, salon });
+        }
+        /// <summary>
+        /// Get salon by User ID
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet("getSalonByUserId/{userId}")]
+        public async Task<IActionResult> GetSalonByUserId(Guid userId)
+        {
+            var salon = await _context.Salons
+    .Where(s => s.IsVerified && s.UserId == userId)
+    .Select(s => new SalonDto
+    {
+        Id = s.Id,
+        Name = s.SalonName ?? "",
+        NameAr = s.SalonNameAr ?? "",
+        Description = s.AboutText ?? "",
+        DescriptionAr = s.AboutTextAr ?? "",
+        LogoUrl = "", // اگر داری پرش کن
+        PhoneNumber = s.ContactPhone ?? "",
+        Email = s.ContactEmail ?? "",
+        IsActive = s.IsVerified,
+        UserId = s.UserId,
 
         Branches = s.Branches
             .Where(b => b.IsActive)
