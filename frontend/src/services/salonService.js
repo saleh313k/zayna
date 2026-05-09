@@ -18,6 +18,11 @@ export const salonService = {
     return response.data;
   },
 
+  getSalonByUserId: async (id) => {
+    const response = await api.get(`/Salon/getSalonByUserId/${id}`);
+    return response.data;
+  },
+
   getPublicSalonById: async (id) => {
     const response = await api.get(`/publicSalons/${id}`);
     return response.data;
@@ -35,7 +40,7 @@ export const salonService = {
 
   getSalonBookings: async (id, date = null) => {
     const params = date ? { date } : {};
-    const response = await api.get(`/salon/${id}/bookings`, { params });
+    const response = await api.get(`/booking/salon/${id}/`, { params });
     return response.data;
   }
 };

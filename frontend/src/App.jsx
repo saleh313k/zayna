@@ -18,10 +18,13 @@ import SalonList from './components/customer/SalonList';
 import BookingFlow from './components/customer/BookingFlow';
 import BookingDetails from './components/customer/BookingDetails';
 import SalonDashboard from './components/salon/Dashboard';
+import Appointments from './components/salon/Appointments';
+import StylistManagement from './components/salon/StylistManagement';
 import AdminDashboard from './components/admin/Dashboard';
 import Reports from './components/admin/Reports';
 import Users from './components/admin/Users';
 import ComingSoon from './components/common/ComingSoon';
+import Sidebar from './components/common/Sidebar';
 import ClaimSalon from './components/claim/ClaimSalon';
 
 
@@ -70,7 +73,26 @@ function App() {
                 path="/salon/dashboard"
                 element={
                   <ProtectedRoute allowedRoles={[ROLES.SALON]}>
+                    <Sidebar/>
                     <SalonDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/salon/appointments"
+                element={
+                  <ProtectedRoute allowedRoles={[ROLES.SALON]}>
+                    <Sidebar/>
+                    <Appointments />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/salon/Stylists"
+                element={
+                  <ProtectedRoute allowedRoles={[ROLES.SALON]}>
+                    <Sidebar/>
+                    <StylistManagement/>
                   </ProtectedRoute>
                 }
               />

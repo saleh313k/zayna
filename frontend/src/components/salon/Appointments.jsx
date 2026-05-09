@@ -19,9 +19,9 @@ const Appointments = () => {
       customerPhone: '+96891234567',
       service: 'Haircut + Beard',
       stylist: 'Mohammed',
-      price: 8.00,
+      price: 8.0,
       status: 'Confirmed',
-      notes: 'Prefers short hair'
+      notes: 'Prefers short hair',
     },
     {
       id: '2',
@@ -30,9 +30,9 @@ const Appointments = () => {
       customerPhone: '+96892345678',
       service: 'Haircut',
       stylist: 'Ali',
-      price: 5.00,
+      price: 5.0,
       status: 'Pending',
-      notes: ''
+      notes: '',
     },
     {
       id: '3',
@@ -41,30 +41,29 @@ const Appointments = () => {
       customerPhone: '+96893456789',
       service: 'Full Package',
       stylist: 'Mohammed',
-      price: 10.00,
+      price: 10.0,
       status: 'Confirmed',
-      notes: 'Regular customer'
-    }
+      notes: 'Regular customer',
+    },
   ]);
 
-  const filteredAppointments = appointments.filter(apt => {
+  const filteredAppointments = appointments.filter((apt) => {
     if (filter === 'all') return true;
     return apt.status.toLowerCase() === filter;
   });
 
   const updateStatus = (id, newStatus) => {
-    setAppointments(appointments.map(apt => 
-      apt.id === id ? { ...apt, status: newStatus } : apt
-    ));
+    setAppointments(
+      appointments.map((apt) => (apt.id === id ? { ...apt, status: newStatus } : apt))
+    );
   };
 
   return (
     <Layout>
       <div className="max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-primary mb-8">
-          {t('salon.appointments')}
-        </h1>
-
+        <div className="ltr:ml-8 rtl:mr-8">
+          <h1 className="text-3xl font-bold text-primary mb-8">{t('salon.appointments')}</h1>
+        </div>
         {/* Filters */}
         <div className="card mb-6">
           <div className="flex flex-wrap gap-4 items-center">
@@ -95,11 +94,7 @@ const Appointments = () => {
               <label className="block text-sm font-medium mb-2">Search</label>
               <div className="relative">
                 <FiSearch className="absolute left-3 top-3 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search customer..."
-                  className="input-field pl-10"
-                />
+                <input type="text" placeholder="Search customer..." className="input-field pl-10" />
               </div>
             </div>
           </div>
@@ -143,19 +138,20 @@ const Appointments = () => {
                     </td>
                     <td className="py-4 px-4">{appointment.stylist}</td>
                     <td className="py-4 px-4">
-                      <span className="font-semibold text-primary">
-                        {appointment.price} OMR
-                      </span>
+                      <span className="font-semibold text-primary">{appointment.price} OMR</span>
                     </td>
                     <td className="py-4 px-4">
                       <select
                         value={appointment.status}
                         onChange={(e) => updateStatus(appointment.id, e.target.value)}
                         className={`badge cursor-pointer ${
-                          appointment.status === 'Confirmed' ? 'badge-confirmed' :
-                          appointment.status === 'Pending' ? 'badge-pending' :
-                          appointment.status === 'Completed' ? 'badge-completed' :
-                          'badge-cancelled'
+                          appointment.status === 'Confirmed'
+                            ? 'badge-confirmed'
+                            : appointment.status === 'Pending'
+                              ? 'badge-pending'
+                              : appointment.status === 'Completed'
+                                ? 'badge-completed'
+                                : 'badge-cancelled'
                         }`}
                       >
                         <option value="Pending">Pending</option>
@@ -165,9 +161,7 @@ const Appointments = () => {
                       </select>
                     </td>
                     <td className="py-4 px-4">
-                      <button className="text-primary hover:underline text-sm">
-                        Details
-                      </button>
+                      <button className="text-primary hover:underline text-sm">Details</button>
                     </td>
                   </tr>
                 ))}

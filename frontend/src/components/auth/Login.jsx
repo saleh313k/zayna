@@ -42,8 +42,7 @@ const Login = () => {
 
     try {
       const response = await login(phoneNumber, otpCode);
-      toast.success(t('auth.loginSuccess'));
-      
+      toast.success(t('auth.loginSuccess'));      
       // Redirect based on role
       if (response.role === 3) {
         navigate('/dashboard');
@@ -51,6 +50,8 @@ const Login = () => {
         navigate('/salon/dashboard');
       } else if (response.role === 0) {
         navigate('/admin/dashboard');
+      } else if (response.role === 2) {
+        navigate('/stylist/dashboard');
       }
     } catch (error) {
       console.log(error.response?.data);

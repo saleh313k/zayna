@@ -65,8 +65,21 @@
     "addBranch": "إضافة فرع",
     "addStylist": "إضافة مصفف",
     "addService": "إضافة خدمة",
-    "manageSchedule": "إدارة الجدول"
+    "manageSchedule": "إدارة الجدول",
+    "settings" : "إعدادات"
   },
+    "stylist": {
+    "dashboard": "لوحة تحكم المصفف",
+    "schedule" : "جدولی",
+    "profile" : "ملفي الشخصي"
+  },
+  "admin": {
+    "dashboard": "لوحة تحكم",
+    "users" : "المستخدمين",
+    "bookings" : "حجوزات",
+    "settings" : "إعدادات"
+  },
+
   "booking": {
     "selectSalon": "اختر الصالون",
     "selectBranch": "اختر الفرع",

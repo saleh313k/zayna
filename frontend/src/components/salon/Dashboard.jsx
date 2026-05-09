@@ -5,6 +5,8 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { salonService } from '../../services/salonService';
 import Layout from '../common/Layout';
+import { useAuth } from '../../contexts/AuthContext';
+
 import { 
   FiCalendar, 
   FiUsers, 
@@ -16,6 +18,8 @@ import {
 import { format } from 'date-fns';
 
 const SalonDashboard = () => {
+    const { user } = useAuth();
+
   const { t } = useTranslation();
   const [stats, setStats] = useState({
     todayBookings: 8,
@@ -25,6 +29,7 @@ const SalonDashboard = () => {
   });
   const [todayAppointments, setTodayAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [salon, setSalon] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
@@ -32,9 +37,15 @@ const SalonDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
+      
+      const salon = await salonService.getSalonByUserId(user?.userId);
+      console.log(salon.salon);
+      setSalon(salon.salon);
+      
       // Fetch salon bookings for today
       const today = format(new Date(), 'yyyy-MM-dd');
-      // const bookings = await salonService.getSalonBookings(salonId, today);
+      const bookings = await salonService.getSalonBookings(salon.salon.id, today);
+      
       // setTodayAppointments(bookings);
       
       // Mock data for demo
@@ -105,11 +116,11 @@ const SalonDashboard = () => {
     <Layout>
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
-          <div>
+          <div className='ltr:ml-8 rtl:mr-8'>
             <h1 className="text-3xl font-bold text-primary">
               {t('salon.dashboard')}
             </h1>
-            <p className="text-gray-600">Welcome back! Here's your salon overview</p>
+            <p className="text-gray-600">{salon.name}</p>
           </div>
           <div className="text-right">
             <p className="text-sm text-gray-600">Today</p>
@@ -246,6 +257,7 @@ const SalonDashboard = () => {
           </div>
         </div>
       </div>
+
     </Layout>
   );
 };

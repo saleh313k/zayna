@@ -1,11 +1,13 @@
 // frontend/src/components/salon/StylistManagement.jsx
 import { useState, useEffect } from 'react';
-import { useLanguage } from '../../hooks/useLanguage';
-import { Plus, Edit, UserX } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { FiPlus, FiEdit, FiUserX } from 'react-icons/fi';
 import api from '../../services/api';
+import Layout from '../common/Layout';
+
 
 export default function StylistManagement() {
-  const { t } = useLanguage();
+  const { t } = useTranslation();
   const [stylists, setStylists] = useState([]);
   const [showModal, setShowModal] = useState(false);
 
@@ -26,6 +28,7 @@ export default function StylistManagement() {
   };
 
   return (
+    <Layout>
     <div className="max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold text-dark-brown">{t('stylists')}</h1>
@@ -33,7 +36,7 @@ export default function StylistManagement() {
           onClick={() => setShowModal(true)}
           className="flex items-center gap-2 bg-emerald-green text-white px-6 py-3 rounded-lg hover:bg-opacity-90"
         >
-          <Plus size={20} />
+          <FiPlus size={20} />
           {t('add_stylist')}
         </button>
       </div>
@@ -57,11 +60,11 @@ export default function StylistManagement() {
 
             <div className="flex gap-2">
               <button className="flex-1 flex items-center justify-center gap-2 bg-warm-gold text-white py-2 rounded-lg hover:bg-opacity-90">
-                <Edit size={16} />
+                <FiEdit size={16} />
                 {t('edit')}
               </button>
               <button className="flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-opacity-90">
-                <UserX size={16} />
+                <FiUserX size={16} />
               </button>
             </div>
           </div>
@@ -74,5 +77,6 @@ export default function StylistManagement() {
         </div>
       )}
     </div>
+    </Layout>
   );
 }

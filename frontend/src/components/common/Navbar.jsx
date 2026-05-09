@@ -7,8 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import LanguageSwitcher from './LanguageSwitcher';
 import { FiUser, FiLogOut, FiCalendar, FiMenu, FiX } from 'react-icons/fi';
-import Logo from "@/assets/img/logo.png";
-
+import Logo from '@/assets/img/logo.png';
 
 const Navbar = () => {
   const { t } = useTranslation();
@@ -16,25 +15,24 @@ const Navbar = () => {
   const [open, setOpen] = useState(false);
 
   return (
-    <nav className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-20">
-
-          {/* Logo */}
-          <Link to="/" className="flex items-center" onClick={() => setOpen(false)}>
-            <img
-              src={Logo}
-              alt="ZAYNA - Your Time to Shine"
-              className="h-14 w-auto object-contain"
-            />
-          </Link>
-
-          {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-6">
+    <>
+      <nav className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between h-20">
+            {/* Logo */}
+            <Link to="/" className="flex items-center" onClick={() => setOpen(false)}>
+              <img
+                src={Logo}
+                alt="ZAYNA - Your Time to Shine"
+                className="h-14 w-auto object-contain"
+              />
+            </Link>
+            {/* Desktop Menu */}
+            {/* <div className="hidden md:flex items-center space-x-6">
             <Link to="/salons" className="text-text hover:text-primary transition-colors">
               {t('nav.salons')}
             </Link>
-
+            
             {user && (
               <>
                 <Link
@@ -75,27 +73,59 @@ const Navbar = () => {
             )}
 
             <LanguageSwitcher />
-          </div>
+          </div> */}
 
-          {/* Mobile Button */}
-          <button
-            className="md:hidden text-2xl text-text"
-            onClick={() => setOpen(!open)}
-          >
-            {open ? <FiX /> : <FiMenu />}
-          </button>
+            {/* Mobile Button */}
+            <div className="flex flex-row md:flex items-center space-x-6">
+              <LanguageSwitcher />
+              {!user && (
+                <>
+                  <Link to="/login" onClick={() => setOpen(false)} className="block text-text">
+                    {t('nav.login')}
+                  </Link>
+                  <Link
+                    to="/register"
+                    onClick={() => setOpen(false)}
+                    className="block btn-primary text-center"
+                  >
+                    {t('nav.register')}
+                  </Link>
+                </>
+              )}
+              {user && (
+                <button
+                  className="text-2xl text-text"
+                  onMouseEnter={() => setOpen(true)}
+                  onMouseLeave={() => setOpen(false)}
+                >
+                  {/* <img
+              alt=""
+              src={Logo}
+              className="inline-block size-10 rounded-full ring-1 ring-gray-200 outline -outline-offset-1 outline-white/10"
+              /> */}
+                  <FiUser />
+                  {/* {open ? <FiX /> : <FiMenu />} */}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      </nav>
 
       {/* Mobile Menu */}
       <div
-        className={`md:hidden transition-all duration-300 overflow-hidden ${
+        className={`transition-all duration-300 overflow-hidden ${
           open ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
-        }`}
+        } rtl:left-28  ltr:right-28 fixed shadow-md z-50 top-16 `}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
       >
         <div className="bg-white px-6 py-5 space-y-4 shadow-lg">
-
-          <Link to="/salons" onClick={() => setOpen(false)} className="block text-text hover:text-primary">
+          <Link
+            to="/salons"
+            onClick={() => setOpen(false)}
+            className="block text-text hover:text-primary"
+          >
             {t('nav.salons')}
           </Link>
 
@@ -107,29 +137,17 @@ const Navbar = () => {
               <Link to="/dashboard" onClick={() => setOpen(false)} className="block text-text">
                 {t('nav.dashboard')}
               </Link>
-              <button onClick={logout} className="block text-text">
-                {t('nav.logout')}
-              </button>
-            </>
-          )}
-
-          {!user && (
-            <>
-              <Link to="/login" onClick={() => setOpen(false)} className="block text-text">
-                {t('nav.login')}
-              </Link>
-              <Link to="/register" onClick={() => setOpen(false)} className="block btn-primary text-center">
-                {t('nav.register')}
-              </Link>
             </>
           )}
 
           <div className="pt-4 border-t">
-            <LanguageSwitcher />
+            <button onClick={logout} className="block text-text text-red-400">
+              {t('nav.logout')}
+            </button>
           </div>
         </div>
       </div>
-    </nav>
+    </>
   );
 };
 

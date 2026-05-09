@@ -72,7 +72,19 @@
     "unclaimed" : "Call to Book",
     "verified":"Verified",
     "callToBookTooltip" : "Online booking not available. Please call to book",
-    "clickToShowNumber" : "Click to Show"
+    "clickToShowNumber" : "Click to Show",
+    "settings" : "Settings"
+  },
+  "stylist": {
+    "dashboard": "Stylist Dashboard",
+    "schedule" : "My Schedule",
+    "profile" : "My Profile"
+  },
+  "admin": {
+    "dashboard": "Admin Dashboard",
+    "users" : "Users",
+    "bookings" : "Bookings",
+    "settings" : "Settings"
   },
   "booking": {
     "selectSalon": "Select Salon",
