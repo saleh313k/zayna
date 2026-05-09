@@ -15,10 +15,9 @@ export const salonService = {
 
   getSalonById: async (id) => {
     const response = await api.get(`/publicSalons/${id}`);
-    
     return response.data;
   },
-  
+
   getPublicSalonById: async (id) => {
     const response = await api.get(`/publicSalons/${id}`);
     return response.data;

@@ -16,7 +16,12 @@ namespace ZAYNA.Core.Entities
 
         public NotificationType Type { get; set; }
 
+<<<<<<< HEAD
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public bool IsRead { get; set; }
+=======
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public bool IsRead { get; set; }
+>>>>>>> ad1c20bbfa5fae845c4a70a80e033b30b71be9d7
     }
 }

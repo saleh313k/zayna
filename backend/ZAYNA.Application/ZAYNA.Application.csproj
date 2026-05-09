@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!-- ZAYNA.Application/ZAYNA.Application.csproj -->
 <Project Sdk="Microsoft.NET.Sdk">
 
@@ -16,4 +17,24 @@
     <ProjectReference Include="..\ZAYNA.Core\ZAYNA.Core.csproj" />
   </ItemGroup>
 
+=======
+<!-- ZAYNA.Application/ZAYNA.Application.csproj -->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AutoMapper" Version="13.0.1" />
+    <PackageReference Include="FluentValidation" Version="11.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ZAYNA.Core\ZAYNA.Core.csproj" />
+  </ItemGroup>
+
+>>>>>>> ad1c20bbfa5fae845c4a70a80e033b30b71be9d7
 </Project>
