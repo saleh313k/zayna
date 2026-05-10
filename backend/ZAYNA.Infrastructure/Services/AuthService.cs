@@ -30,13 +30,15 @@ namespace Zayna.Infrastructure.Services
         // =========================================================
         // LOGIN (Phone + OTP)
         // =========================================================
-        public async Task<AuthResponseDto> LoginWithPhoneAsync(string phoneNumber, string otpCode)
+        public async Task<AuthResponseDto> LoginWithPhoneAsync(string phoneNumber, string otpCode, UserLanguage userLanguage)
         {
             // 1. Verify OTP for LOGIN purpose
             var otpValid = await _otpService.VerifyOtpAsync(
                 phoneNumber,
                 otpCode,
-                OTPPurpose.Login
+                OTPPurpose.Login,
+                userLanguage
+
             );
 
             if (!otpValid)
@@ -78,7 +80,8 @@ namespace Zayna.Infrastructure.Services
             var otpValid = await _otpService.VerifyOtpAsync(
                 dto.PhoneNumber,
                 dto.OtpCode,
-                OTPPurpose.Registration
+                OTPPurpose.Registration,
+                dto.UserLanguage
             );
 
             if (!otpValid)

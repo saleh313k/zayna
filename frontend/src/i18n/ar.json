@@ -66,6 +66,8 @@
     "addStylist": "إضافة مصفف",
     "addService": "إضافة خدمة",
     "manageSchedule": "إدارة الجدول",
+    "view_on_map": "عرض الموقع على الخريطة",
+    "map_cta": "جاهز لزيارة {{name}}؟",
     "settings" : "إعدادات"
   },
     "stylist": {
@@ -117,5 +119,45 @@
     "confirm": "تأكيد",
     "viewDetails": "عرض التفاصيل",
     "close": "إغلاق"
+  },
+  "footer": {
+    "copyright": "© {{year}} زَيْنَة. جميع الحقوق محفوظة.",
+    "contact": "تواصل معنا",
+    "report_bug": "الإبلاغ عن خطأ",
+    "whatsapp_aria": "تواصل معنا عبر واتساب",
+    "bug_modal": {
+      "title": "الإبلاغ عن خطأ",
+      "subtitle": "زَيْنَة",
+      "categories": {
+        "ui": "مشكلة في الواجهة",
+        "crash": "توقف / تعطّل",
+        "performance": "بطء / أداء",
+        "data": "مشكلة في البيانات",
+        "other": "أخرى"
+      },
+      "fields": {
+        "category_label": "التصنيف",
+        "title_label": "عنوان المشكلة",
+        "title_placeholder": "مثال: زر الإرسال لا يعمل",
+        "description_label": "وصف المشكلة",
+        "description_placeholder": "ماذا حدث؟ ماذا كنت تتوقع؟",
+        "steps_label": "خطوات إعادة الإنتاج (اختياري)",
+        "steps_placeholder": "١. ذهبت إلى صفحة X\n٢. ضغطت على زر Y\n٣. ظهر الخطأ",
+        "name_label": "الاسم (اختياري)",
+        "name_placeholder": "اسمك",
+        "email_label": "البريد الإلكتروني (اختياري)",
+        "email_placeholder": "للمتابعة"
+      },
+      "required": "مطلوب",
+      "submit": "إرسال التقرير",
+      "submitting": "جارٍ الإرسال...",
+      "success_title": "تم إرسال التقرير بنجاح!",
+      "success_message": "شكراً لك. سيقوم فريقنا بمراجعته في أقرب وقت ممكن.",
+      "success_close": "إغلاق",
+      "error_message": "فشل الإرسال. تحقق من اتصالك وحاول مجدداً.",
+      "close_aria": "إغلاق النافذة"
+    }
   }
+
+
 }

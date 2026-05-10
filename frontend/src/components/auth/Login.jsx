@@ -9,13 +9,15 @@ import { authService } from '../../services/authService';
 import { toast } from 'react-toastify';
 import { FiPhone, FiKey } from 'react-icons/fi';
 import Logo from "@/assets/img/logo.png";
+import { GoogleLogin } from '@react-oauth/google';
+
 
 
 const Login = () => {
   const { t } = useTranslation();
   const { login } = useAuth();
   const navigate = useNavigate();
-  
+
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -24,7 +26,7 @@ const Login = () => {
   const handleSendOtp = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
       await authService.sendOtp(phoneNumber, 'Login');
       setOtpSent(true);
@@ -42,7 +44,8 @@ const Login = () => {
 
     try {
       const response = await login(phoneNumber, otpCode);
-      toast.success(t('auth.loginSuccess'));      
+      toast.success(t('auth.loginSuccess'));
+
       // Redirect based on role
       if (response.role === 3) {
         navigate('/dashboard');
@@ -55,11 +58,35 @@ const Login = () => {
       }
     } catch (error) {
       console.log(error.response?.data);
-      
+
       toast.error(error.response?.data?.message || t('common.error'));
     } finally {
       setLoading(false);
     }
+  };
+
+  const GoogleButton = () => {
+
+    const handleSuccess = (credentialResponse) => {
+      const accessToken = credentialResponse.credential;
+
+      // حالا متد بک‌اند رو صدا بزن
+      authService.socialLogin('google', accessToken, '', '', '')
+        .then(res => console.log('Login success:', res))
+        .catch(err => console.error('Login failed:', err));
+    };
+
+    const handleError = () => {
+      console.error('Google Login Failed');
+    };
+
+
+    return (
+      <GoogleLogin
+        onSuccess={handleSuccess}
+        onError={handleError}
+      />
+    );
   };
 
   return (
@@ -164,19 +191,23 @@ const Login = () => {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-4 gap-3">
-            <button className="btn-outline p-2">
-              <img src="/icons/google.svg" alt="Google" className="h-6 w-6 mx-auto" />
+          <div className="mt-6 grid grid-cols-1 gap-3">
+            {/* <button onClick={GoogleButton} className="btn-outline p-2">
+              <img src="/src/assets/icons/google.png" alt="Google" className="h-6 w-6 mx-auto" />
+            </button> */}
+            <GoogleLogin
+              onSuccess={(res) => console.log('success', res)}
+              onError={() => console.log('failed')}
+            />
+            {/* <button className="btn-outline p-2 disabled:opacity-50 disabled:border-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed" disabled>
+              <img src="/src/assets/icons/apple.png" alt="Apple" className="h-6 w-6 mx-auto" />
             </button>
-            <button className="btn-outline p-2">
-              <img src="/icons/apple.svg" alt="Apple" className="h-6 w-6 mx-auto" />
+            <button className="btn-outline p-2 disabled:opacity-50 disabled:border-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed" disabled>
+              <img src="/src/assets/icons/facebook.png" alt="Facebook" className="h-6 w-6 mx-auto" />
             </button>
-            <button className="btn-outline p-2">
-              <img src="/icons/facebook.svg" alt="Facebook" className="h-6 w-6 mx-auto" />
-            </button>
-            <button className="btn-outline p-2">
-              <img src="/icons/twitter.svg" alt="Twitter" className="h-6 w-6 mx-auto" />
-            </button>
+            <button className="btn-outline p-2 disabled:opacity-50 disabled:border-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed" disabled>
+              <img src="/src/assets/icons/twitter.png" alt="Twitter" className="h-6 w-6 mx-auto" />
+            </button> */}
           </div>
         </div>
       </div>

@@ -72,6 +72,11 @@ namespace ZAYNA.Core.Enums
         Login = 2,
         PasswordReset = 3
     }
+    public enum UserLanguage
+    {
+        English = 1,
+        Arabic = 2
+    }
     public enum SocialProvider
     {
         Google = 1,

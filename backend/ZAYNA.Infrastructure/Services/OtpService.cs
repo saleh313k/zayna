@@ -22,7 +22,7 @@ public class OtpService : IOtpService
     // ============================
     // Send OTP
     // ============================
-    public async Task<bool> SendOtpAsync(string phoneNumber, OTPPurpose purpose)
+    public async Task<bool> SendOtpAsync(string phoneNumber, OTPPurpose purpose, UserLanguage userLanguage)
     {
         // 1️⃣ تولید OTP امن
         var code = GenerateSecureOtp();
@@ -56,14 +56,23 @@ public class OtpService : IOtpService
         await _otpRepository.AddAsync(otp);
 
         // 4️⃣ ارسال SMS
-        var message = $"Your verification code is: {code}";
-        return await _smsService.SendAsync(phoneNumber, message);
+        var messageEN = $"Zayna.om - Your verification code is: {code}";
+        var messageAR = $"Zayna.om - رمز التحقق الخاص بك هو: {code}";
+        if (userLanguage == UserLanguage.English) {
+            return await _smsService.SendAsync(phoneNumber, messageEN);
+        }
+        else if (userLanguage == UserLanguage.Arabic)
+        {
+            return await _smsService.SendAsync(phoneNumber, messageAR);
+            
+        }
+         return await _smsService.SendAsync(phoneNumber, messageEN);
     }
 
     // ============================
     // Verify OTP
     // ============================
-    public async Task<bool> VerifyOtpAsync(string phoneNumber, string code, OTPPurpose purpose)
+    public async Task<bool> VerifyOtpAsync(string phoneNumber, string code, OTPPurpose purpose, UserLanguage userLanguage)
     {
         //// 1️⃣ پیدا کردن آخرین OTP معتبر
         //var otp = await _otpRepository.FirstOrDefaultAsync(x =>

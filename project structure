@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ZAYNA/
 ├── Backend/
 │   ├── Zayna.API/
@@ -52,4 +53,60 @@ ZAYNA/
 ├── .gitignore ✅
 ├── setup.sh ✅
 ├── dev.sh ✅
+=======
+ZAYNA/
+├── Backend/
+│   ├── Zayna.API/
+│   │   ├── Controllers/ (8 controllers❌)
+│   │   ├── Program.cs ✅
+│   │   ├── appsettings.json ✅
+│   │   └── Dockerfile ❌
+│   ├── Zayna.Core/
+│   │   ├── Entities/ (12 entities ✅)
+│   │   ├── Interfaces/ (5 interfaces ✅)
+│   │   ├── DTOs/ (15+ DTOs ❌)
+│   │   └── Zayna.Core.csproj ✅
+│   └── Zayna.Infrastructure/
+│       ├── Data/ZaynaDbContext.cs ❌
+│       ├── Repositories/Repository.cs ✅
+│       ├── Services/ (5 services ✅)
+│       └── Zayna.Infrastructure.csproj ✅
+│
+├── Frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── auth/ (3 components ❌)
+│   │   │   ├── common/ (7 components ✅)
+│   │   │   ├── customer/ (4 components ✅)
+│   │   │   ├── salon/ (2 components ✅)
+│   │   │   └── admin/ (3 components ✅)
+│   │   ├── contexts/ (2 contexts ✅)
+│   │   ├── services/ (3 services ✅)
+│   │   ├── i18n/ (3 files ✅)
+│   │   ├── utils/ (2 utility files ✅)
+│   │   ├── hooks/ (2 custom hooks ✅)
+│   │   ├── App.jsx ✅
+│   │   ├── main.jsx ✅
+│   │   └── index.css ✅
+│   ├── public/
+│   │   ├── manifest.json ✅
+│   │   └── robots.txt ✅
+│   ├── package.json ✅
+│   ├── tailwind.config.js ✅
+│   ├── vite.config.js ✅
+│   ├── Dockerfile ✅
+│   ├── nginx.conf ✅
+│   ├── .eslintrc.json ✅
+│   └── .prettierrc ✅
+│
+├── Database/
+│   ├── schema.sql ✅
+│   └── seed-data.sql ✅
+│
+├── docker-compose.yml ✅
+├── .env.example ✅
+├── .gitignore ✅
+├── setup.sh ✅
+├── dev.sh ✅
+>>>>>>> ad1c20bbfa5fae845c4a70a80e033b30b71be9d7
 └── README.md ✅

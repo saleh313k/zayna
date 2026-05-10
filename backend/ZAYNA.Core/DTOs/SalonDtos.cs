@@ -18,7 +18,6 @@ namespace Zayna.Core.DTOs
     public class SalonDto
     {
         public Guid Id { get; set; }
-        public Guid UserId { get; set; }
         public required string Name { get; set; }
         public required string NameAr { get; set; }
         public required string Description { get; set; }

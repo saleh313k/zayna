@@ -1,150 +1,3 @@
-// // ============================================
-// // src/components/customer/SalonList.jsx
-// // ============================================
-// import React, { useState, useEffect } from 'react';
-// import { Link } from 'react-router-dom';
-// import { useTranslation } from 'react-i18next';
-// import { salonService } from '../../services/salonService';
-// import Layout from '../common/Layout';
-// import { FiMapPin, FiPhone, FiStar } from 'react-icons/fi';
-
-// const SalonList = () => {
-//   const { t } = useTranslation();
-//   const [salons, setSalons] = useState([]);
-//   const [loading, setLoading] = useState(true);
-//   const [searchTerm, setSearchTerm] = useState('');
-
-//   useEffect(() => {
-//     fetchSalons();
-//   }, []);
-
-//   const fetchSalons = async () => {
-//     try {
-//       const data = await salonService.getAllPublicSalons();
-//       setSalons(data);
-//         console.log("🚀 ~ fetchSalons ~ data:", data)
-
-//     } catch (error) {
-//       console.error('Error fetching salons:', error);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const filteredSalons = salons.filter(salon =>
-//     salon.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-//     salon.nameAr?.includes(searchTerm)
-//   );
-
-//   if (loading) {
-//     return (
-//       <Layout>
-//         <div className="flex justify-center items-center h-64">
-//           <div className="spinner"></div>
-//         </div>
-//       </Layout>
-//     );
-//   }
-
-//   return (
-//     <Layout>
-//       <div className="max-w-7xl mx-auto">
-//         <div className="mb-8">
-//           <h1 className="text-3xl font-bold text-primary mb-4">{t('nav.salons')}</h1>
-//           <input
-//             type="text"
-//             placeholder={t('common.search')}
-//             value={searchTerm}
-//             onChange={(e) => setSearchTerm(e.target.value)}
-//             className="input-field max-w-md"
-//           />
-//         </div>
-
-//         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-//           {filteredSalons.map((salon) => (
-
-//             <Link
-//               key={salon.id}
-//               to={`/book?salon=${salon.id}`}
-//               className="card hover:shadow-xl transition-all group"
-//             >
-//               <div className="aspect-video bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
-//                 {salon.photoUrl ? (
-//                   <img
-//                     src={salon.photoUrl}
-//                     alt={salon.name}
-//                     className="w-full h-full object-cover"
-//                   />
-//                 ) : (
-//                   <div className="text-6xl">💈</div>
-//                 )}
-//               </div>
-
-//               <h3 className="text-xl font-semibold text-primary group-hover:text-accent transition-colors mb-2">
-//                 {salon.name}
-//               </h3>
-
-//               {/* <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-//                 {salon.description}
-//               </p> */}
-
-//               <div className="space-y-2 text-sm text-gray-600">
-//                 {salon.address != null && (
-//                   <div className="flex items-center">
-//                     <FiMapPin className="mr-2 flex-shrink-0" />
-//                     <span className="truncate">{salon.address}</span>
-//                   </div>
-//                 )}
-//                 {salon.phone!=null && (
-//                   <div className="flex items-center">
-//                     <FiPhone className="mr-2 flex-shrink-0" />
-//                     <span>{salon.phone}</span>
-//                   </div>
-//                 )}
-//               </div>
-
-//               <div className="mt-4 pt-4 border-t flex justify-between items-center">
-
-// {salon?.rating != null && (
-//   <div className="flex items-center text-accent">
-//     <FiStar className="mr-1 fill-current text-sm" />
-
-//     <span className="font-semibold">
-//       {Number(salon.rating).toFixed(1)}
-//     </span>
-
-//     {salon.reviews != null && (
-//       <span className="text-gray-500 text-sm ml-1">
-//         ({salon.reviews})
-//       </span>
-//     )}
-//   </div>
-// )}
-//       <div className="flex flex-col">
-
-//       <span className="text-gray-500 text-sm">
-//         {t('salon.areYouTheOwner')}
-//       </span>
-//                 <span className="text-primary font-medium group-hover:underline">
-//                   {t('salon.claim')}
-//                 </span>
-//               </div>
-//       </div>
-//             </Link>
-//           ))}
-//         </div>
-
-//         {filteredSalons.length === 0 && (
-//           <div className="card text-center py-12">
-//             <p className="text-gray-500">{t('common.noData')}</p>
-//           </div>
-//         )}
-//       </div>
-//     </Layout>
-//   );
-// };
-
-// export default SalonList;
 
 // ============================================
 // src/components/customer/SalonList.jsx
@@ -157,6 +10,8 @@ import Layout from '../common/Layout';
 import { FiMapPin, FiPhone, FiStar } from 'react-icons/fi';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { toSlug } from './SalonDetail';
+
 
 const SalonList = () => {
   const { t } = useTranslation();
@@ -230,21 +85,20 @@ const SalonList = () => {
             const isActive = salon.isActive === true;
 
             const CardWrapper = ({ children }) => {
-              if (isActive) {
-                return (
-                  <Link
-                    to={`/salon/${salon.id}`}
-                    className="card hover:shadow-xl transition-all group flex flex-col h-full"
-                  >
-                    {!salon.isActive && (
-                      <span className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
-                        Unclaimed
-                      </span>
-                    )}
-                    {children}
-                  </Link>
-                );
-              }
+
+              return (
+                <div
+                  className="card hover:shadow-xl transition-all group flex flex-col h-full"
+                >
+                  {!salon.isActive && (
+                    <span className="absolute top-2 left-2 bg-yellow-500 text-white text-xs px-2 py-1 rounded">
+                      Unclaimed
+                    </span>
+                  )}
+                  {children}
+                </div>
+              );
+
 
               return <div className="card flex flex-col h-full">{children}</div>;
             };
@@ -264,45 +118,47 @@ const SalonList = () => {
                   )}
                 </div>
 
-<div className="relative group inline-block mb-2">
+                <div className="relative group inline-block mb-2">
 
-  {/* VERIFIED */}
-  {salon.isActive && (
-    <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-600 text-white shadow">
-      {t('salon.verified', 'Verified')}
-    </span>
-  )}
+                  {/* VERIFIED */}
+                  {salon.isActive && (
+                    <span className="px-3 py-1 text-xs font-semibold rounded-full bg-green-600 text-white shadow">
+                      {t('salon.verified', 'Verified')}
+                    </span>
+                  )}
 
-  {/* CALL TO BOOK */}
-  {!salon.isActive && salon.phone && (
-    <>
-      <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 cursor-pointer">
-        {t('salon.unclaimed', 'Call to Book')}
-      </span>
+                  {/* CALL TO BOOK */}
+                  {!salon.isActive && salon.phone && (
+                    <>
+                      <span className="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 cursor-pointer">
+                        {t('salon.unclaimed', 'Call to Book')}
+                      </span>
 
-      {/* Tooltip */}
-      <div
-        className="
+                      {/* Tooltip */}
+                      <div
+                        className="
           absolute bottom-full left-1/2 -translate-x-1/2 mb-2
           hidden group-hover:block
           bg-black text-white text-xs rounded-lg px-3 py-2
           whitespace-nowrap z-50
         "
-      >
-        {t(
-          'salon.callToBookTooltip',
-          'Online booking not available. Please call to book'
-        )}
-      </div>
-    </>
-  )}
+                      >
+                        {t(
+                          'salon.callToBookTooltip',
+                          'Online booking not available. Please call to book'
+                        )}
+                      </div>
+                    </>
+                  )}
 
-</div>
+                </div>
 
                 {/* Name */}
-                <h3 className="text-xl font-semibold text-primary group-hover:text-accent transition-colors mb-2">
-                  {salon.name}
-                </h3>
+                <Link to={`/salons/${toSlug(salon.city || 'muscat')}/${toSlug(salon.name)}-${salon.id}`}>
+                  <h3 className="text-xl font-semibold text-primary group-hover:text-accent transition-colors mb-2">
+                    {salon.name}
+                  </h3>
+                </Link>
 
                 {/* Info */}
                 <div className="space-y-2 text-sm text-gray-600">

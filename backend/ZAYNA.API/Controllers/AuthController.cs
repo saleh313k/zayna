@@ -62,7 +62,9 @@ namespace Zayna.API.Controllers
             var verified = await _otpService.VerifyOtpAsync(
                 dto.PhoneNumber,
                 dto.OtpCode,
-                OTPPurpose.Registration);
+                OTPPurpose.Registration,
+                dto.UserLanguage
+                );
 
             if (!verified)
                 return BadRequest(new { message = "Invalid OTP" });
@@ -79,7 +81,9 @@ namespace Zayna.API.Controllers
         {
             var response = await _authService.LoginWithPhoneAsync(
                 dto.PhoneNumber,
-                dto.OtpCode);
+                dto.OtpCode,
+                dto.UserLanguage
+                );
 
             return Ok(response);
         }

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 {
   "semi": true,
   "trailingComma": "es5",
@@ -5,4 +6,13 @@
   "printWidth": 100,
   "tabWidth": 2,
   "arrowParens": "always"
+=======
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": true,
+  "printWidth": 100,
+  "tabWidth": 2,
+  "arrowParens": "always"
+>>>>>>> ad1c20bbfa5fae845c4a70a80e033b30b71be9d7
 }

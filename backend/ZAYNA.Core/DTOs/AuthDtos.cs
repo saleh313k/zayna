@@ -9,6 +9,7 @@ namespace Zayna.Core.DTOs
     {
         public string PhoneNumber { get; set; } = string.Empty;
         public string OtpCode { get; set; } = string.Empty;
+        public UserLanguage UserLanguage { get; set; }
     }
 
     public class RegisterDto
@@ -19,6 +20,8 @@ namespace Zayna.Core.DTOs
         public string FullNameAr { get; set; } = string.Empty;
         public UserRole Role { get; set; }
         public string OtpCode { get; set; } = string.Empty;
+
+        public UserLanguage UserLanguage { get; set; }
     }
 
     public class SocialLoginDto
@@ -46,6 +49,7 @@ namespace Zayna.Core.DTOs
     {
         public required string PhoneNumber { get; set; } 
         public OTPPurpose Purpose { get; set; }
+        public UserLanguage UserLanguage { get; set; }
     }
 
     public class VerifyOtpDto

@@ -4,6 +4,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import ProtectedRoute from './routes/ProtectedRoute';
 import { ROLES } from './constants/roles';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -24,13 +25,20 @@ import AdminDashboard from './components/admin/Dashboard';
 import Reports from './components/admin/Reports';
 import Users from './components/admin/Users';
 import ComingSoon from './components/common/ComingSoon';
+import Footer from './components/common/Footer.tsx';
 import Sidebar from './components/common/Sidebar';
 import ClaimSalon from './components/claim/ClaimSalon';
+import SalonDetail from './components/customer/SalonDetail';
+import { HelmetProvider } from 'react-helmet-async';
+
+
 
 
 function App() {
   return (
-    <BrowserRouter>
+    <GoogleOAuthProvider clientId="443863336831-s2n4mfnks0riv6nluklud58th40eigjr.apps.googleusercontent.com">
+      <HelmetProvider>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <LanguageProvider>
         <AuthProvider>
           <div className="App">
@@ -39,6 +47,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<WizardRegistration />} />
               <Route path="/salons" element={<SalonList />} />
+              <Route path="/salons/:city/:slug" element={<SalonDetail />} />
               <Route path="/comingsoon" element={<ComingSoon />} />
               <Route path="/claim/:salonId" element={<ClaimSalon />} />
 
@@ -140,8 +149,11 @@ function App() {
             />
           </div>
         </AuthProvider>
+      <Footer />
       </LanguageProvider>
     </BrowserRouter>
+          </HelmetProvider>
+    </GoogleOAuthProvider>
   );
 }
 
