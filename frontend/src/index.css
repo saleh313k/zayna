@@ -87,5 +87,4 @@
   transition-property: background-color, border-color, color, fill, stroke;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 150ms;
->>>>>>> ad1c20bbfa5fae845c4a70a80e033b30b71be9d7
 }
