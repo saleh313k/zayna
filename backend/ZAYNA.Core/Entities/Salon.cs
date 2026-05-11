@@ -26,17 +26,10 @@ namespace ZAYNA.Core.Entities
         // Navigation
         public ICollection<Branch> Branches { get; set; } = new List<Branch>();
         public ICollection<Stylist> Stylists { get; set; } = new List<Stylist>();
-<<<<<<< HEAD
         public ICollection<Service> Services { get; set; } = new List<Service>();
         public ICollection<Review> Reviews { get; set; } = new List<Review>();
 
         public Guid UserId { get; set; }
-=======
-        public ICollection<Service> Services { get; set; } = new List<Service>();
-        public ICollection<Review> Reviews { get; set; } = new List<Review>();
-
-        public Guid UserId { get; set; }
->>>>>>> ad1c20bbfa5fae845c4a70a80e033b30b71be9d7
         public User User { get; set; } = null!;
     }
 }

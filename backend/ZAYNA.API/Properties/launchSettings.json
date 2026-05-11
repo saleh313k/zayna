@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 ﻿// ZAYNA.API/Properties/launchSettings.json
 {
   "profiles": {
@@ -13,20 +12,4 @@
       }
     }
   }
-=======
-﻿// ZAYNA.API/Properties/launchSettings.json
-{
-  "profiles": {
-    "ZAYNA.API": {
-      "commandName": "Project",
-      "dotnetRunMessages": true,
-      "launchBrowser": true,
-      "launchUrl": "api/docs",
-      "applicationUrl": "https://localhost:7001;http://localhost:5000",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    }
-  }
->>>>>>> ad1c20bbfa5fae845c4a70a80e033b30b71be9d7
 }
