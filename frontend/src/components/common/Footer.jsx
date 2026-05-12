@@ -1,8 +1,8 @@
 // frontend/src/components/common/Footer.jsx
-import { useLanguage } from '../../hooks/useLanguage';
+import { useTranslation } from 'react-i18next';
 
 export default function Footer() {
-  const { t } = useLanguage();
+  const { t } = useTranslation();
   
   return (
     <footer className="bg-dark-brown text-white py-8 mt-auto">
