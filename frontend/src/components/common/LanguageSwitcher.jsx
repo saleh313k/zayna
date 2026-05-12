@@ -11,13 +11,13 @@ const LanguageSwitcher = () => {
   return (
     <button
       onClick={toggleLanguage}
-      className="flex items-center space-x-2 text-text hover:text-primary transition-colors"
+      className={`flex items-center text-text hover:text-primary transition-colors`}
       aria-label="Toggle Language"
     >
+      <span className={`  ltr:mr-2 rtl:ml-2 font-medium ${
+        language === 'en' ? 'font-arabic' : 'font-sans'
+      }`}>{language === 'en' ? 'العربية' : 'English'}</span>
       <FiGlobe />
-      <span className={`font-medium ${
-    language === 'en' ? 'font-arabic' : 'font-sans'
-  }`}>{language === 'en' ? 'العربية' : 'English'}</span>
     </button>
   );
 };

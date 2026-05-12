@@ -76,7 +76,7 @@ const Navbar = () => {
           </div> */}
 
             {/* Mobile Button */}
-            <div className="flex flex-row md:flex items-center space-x-6">
+            <div className="flex flex-row justify-center md:flex items-center">
               <LanguageSwitcher />
               {!user && (
                 <>
@@ -93,6 +93,8 @@ const Navbar = () => {
                 </>
               )}
               {user && (
+                <>
+                <div className='flex justify-center relative group inline-block  ltr:ml-4 rtl:mr-4'>
                 <button
                   className="text-2xl text-text"
                   onMouseEnter={() => setOpen(true)}
@@ -106,17 +108,13 @@ const Navbar = () => {
                   <FiUser />
                   {/* {open ? <FiX /> : <FiMenu />} */}
                 </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Mobile Menu */}
-      <div
-        className={`transition-all duration-300 overflow-hidden ${
-          open ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
-        } rtl:left-28  ltr:right-28 fixed shadow-md z-50 top-16 `}
+                      <div
+                      className={`absolute top-full ltr:-mr-8 rtl:-ml-8 ltr:-translate-x-1/2 rtl:translate-x-1/2 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-xl 
+                        invisible opacity-0 group-hover:visible group-hover:opacity-100 
+                        transition-all duration-300 ease-out z-50`}
+        // className={`transition-all absolute duration-300 overflow-hidden ${
+        //   open ? 'max-h-screen opacity-100' : 'max-h-0 opacity-0'
+        // } rtl:left-28  ltr:right-28 fixed shadow-md z-50 top-16 `}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
       >
@@ -146,7 +144,17 @@ const Navbar = () => {
             </button>
           </div>
         </div>
+        </div>
       </div>
+      </>
+              )}
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      {/* Mobile Menu */}
+
     </>
   );
 };
