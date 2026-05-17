@@ -182,6 +182,7 @@ import React, { useState } from "react";
 import Layout from '../common/Layout';
 // import emailjs from "@emailjs/browser";
 import { FiCheckCircle } from "react-icons/fi";
+import { Link } from "react-router-dom";
 
 const ClaimSalon = () => {
   const [loading, setLoading] = useState(false);
@@ -221,7 +222,7 @@ const ClaimSalon = () => {
       //   "YOUR_PUBLIC_KEY"
       // );
 
-      // setSuccess(true);
+      setSuccess(true);
 
       // setForm({
       //   name: "",
@@ -352,6 +353,16 @@ const ClaimSalon = () => {
                 <p className="text-gray-600">
                   Our team will contact you soon.
                 </p>
+                <Link
+                to="/"
+                >
+                  <button
+                    type="button"
+                    className="btn-primary w-full mt-8"
+                  >
+                    Go Back Home
+                  </button>
+                  </Link>
               </div>
             )}
           </div>
