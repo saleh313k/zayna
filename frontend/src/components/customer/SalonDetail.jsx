@@ -620,7 +620,7 @@ const SalonDetail = () => {
                   to={`/claim/${salon.id}`}
                   className="inline-block mt-1 w-full text-center bg-primary/10 text-primary font-semibold py-2.5 rounded-xl hover:bg-primary hover:text-white transition text-sm"
                 >
-                  {t('salon.claimThisPage', "Claim This Page – It's Free")}
+                  {t('salon.claimThisPage', "Claim This Page – It's Free For 14 Days")}
                 </Link>
               </div>
             )}

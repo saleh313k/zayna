@@ -286,7 +286,7 @@ const ClaimSalon = () => {
             {!success ? (
               <>
                 <h2 className="text-2xl font-semibold mb-6 text-center">
-                  Claim your business — it's free
+                  Claim your business — It's Free For 14 Days
                 </h2>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
