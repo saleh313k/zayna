@@ -135,6 +135,9 @@ const Navbar = () => {
               <Link to="/dashboard" onClick={() => setOpen(false)} className="block text-text">
                 {t('nav.dashboard')}
               </Link>
+              <Link to="/profile" onClick={() => setOpen(false)} className="block text-text">
+                {t('nav.profile')}
+              </Link>
             </>
           )}
 

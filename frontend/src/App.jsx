@@ -30,6 +30,7 @@ import Sidebar from './components/common/Sidebar';
 import ClaimSalon from './components/claim/ClaimSalon';
 import SalonDetail from './components/customer/SalonDetail';
 import { HelmetProvider } from 'react-helmet-async';
+import Profile from './components/customer/Profile.jsx';
 
 
 
@@ -51,12 +52,21 @@ function App() {
               <Route path="/comingsoon" element={<ComingSoon />} />
               <Route path="/claim/:salonId" element={<ClaimSalon />} />
 
+
               {/* Customer Routes */}
               <Route
                 path="/dashboard"
                 element={
                   <ProtectedRoute allowedRoles={[ROLES.CUSTOMER]}>
                     <CustomerDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute allowedRoles={[ROLES.CUSTOMER]}>
+                    <Profile />
                   </ProtectedRoute>
                 }
               />
