@@ -80,13 +80,13 @@ const Navbar = () => {
               <LanguageSwitcher />
               {!user && (
                 <>
-                  <Link to="/login" onClick={() => setOpen(false)} className="block text-text">
+                  <Link to="/login" onClick={() => setOpen(false)} className="ltr:ml-4 rtl:mr-4 block text-text">
                     {t('nav.login')}
                   </Link>
                   <Link
                     to="/register"
                     onClick={() => setOpen(false)}
-                    className="block btn-primary text-center"
+                    className="block ltr:ml-4 rtl:mr-4 btn-primary text-center"
                   >
                     {t('nav.register')}
                   </Link>
