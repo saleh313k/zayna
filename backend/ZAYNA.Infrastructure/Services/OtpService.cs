@@ -1,4 +1,5 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
+using System.Text;
 using Zayna.Core.Interfaces;
 using ZAYNA.Core.Enums;
 using ZAYNA.Core.Interfaces;
@@ -19,15 +20,20 @@ public class OtpService : IOtpService
         _smsService = smsService;
     }
 
-    // ============================
-    // Send OTP
-    // ============================
-    public async Task<bool> SendOtpAsync(string phoneNumber, OTPPurpose purpose, UserLanguage userLanguage)
+    public async Task<bool> SendOtpAsync(
+        string phoneNumber,
+        OTPPurpose purpose,
+        UserLanguage userLanguage)
     {
-        // 1️⃣ تولید OTP امن
+        if (string.IsNullOrWhiteSpace(phoneNumber) ||
+            !Enum.IsDefined(typeof(OTPPurpose), purpose))
+        {
+            return false;
+        }
+
         var code = GenerateSecureOtp();
 
-        // 2️⃣ غیرفعال کردن OTPهای قبلی استفاده‌نشده (اختیاری ولی حرفه‌ای)
+        // Invalidate any previously issued, unused OTPs for this phone and purpose.
         var oldOtps = await _otpRepository.FindAsync(x =>
             x.PhoneNumber == phoneNumber &&
             x.Purpose == purpose &&
@@ -39,13 +45,15 @@ public class OtpService : IOtpService
         }
 
         if (oldOtps.Any())
+        {
             await _otpRepository.UpdateRangeAsync(oldOtps);
+        }
 
-        // 3️⃣ ذخیره OTP جدید
+        // Store only a SHA-256 hash; the plaintext code is sent only to the user.
         var otp = new OTPVerification
         {
             PhoneNumber = phoneNumber,
-            Code = code,
+            Code = HashOtp(code),
             Purpose = purpose,
             ExpiresAt = DateTime.UtcNow.AddMinutes(OtpExpireMinutes),
             AttemptCount = 0,
@@ -55,68 +63,100 @@ public class OtpService : IOtpService
 
         await _otpRepository.AddAsync(otp);
 
-        // 4️⃣ ارسال SMS
-        var messageEN = $"Zayna.om - Your verification code is: {code}";
-        var messageAR = $"Zayna.om - رمز التحقق الخاص بك هو: {code}";
-        if (userLanguage == UserLanguage.English) {
-            return await _smsService.SendAsync(phoneNumber, messageEN);
-        }
-        else if (userLanguage == UserLanguage.Arabic)
+        var message = userLanguage == UserLanguage.Arabic
+            ? $"Zayna.om - رمز التحقق الخاص بك هو: {code}"
+            : $"Zayna.om - Your verification code is: {code}";
+
+        try
         {
-            return await _smsService.SendAsync(phoneNumber, messageAR);
-            
+            var sent = await _smsService.SendAsync(phoneNumber, message);
+            if (sent)
+            {
+                return true;
+            }
         }
-         return await _smsService.SendAsync(phoneNumber, messageEN);
+        catch
+        {
+            // Do not leave a usable OTP behind if the SMS provider fails.
+        }
+
+        otp.IsUsed = true;
+        await _otpRepository.UpdateAsync(otp);
+        return false;
     }
 
-    // ============================
-    // Verify OTP
-    // ============================
-    public async Task<bool> VerifyOtpAsync(string phoneNumber, string code, OTPPurpose purpose, UserLanguage userLanguage)
+    public async Task<bool> VerifyOtpAsync(
+        string phoneNumber,
+        string code,
+        OTPPurpose purpose,
+        UserLanguage userLanguage)
     {
-        //// 1️⃣ پیدا کردن آخرین OTP معتبر
-        //var otp = await _otpRepository.FirstOrDefaultAsync(x =>
-        //    x.PhoneNumber == phoneNumber &&
-        //    x.Purpose == purpose &&
-        //    !x.IsUsed);
+        if (string.IsNullOrWhiteSpace(phoneNumber) ||
+            string.IsNullOrWhiteSpace(code) ||
+            !Enum.IsDefined(typeof(OTPPurpose), purpose))
+        {
+            return false;
+        }
 
-        //if (otp == null)
-        //    return false;
+        var candidates = await _otpRepository.FindAsync(x =>
+            x.PhoneNumber == phoneNumber &&
+            x.Purpose == purpose &&
+            !x.IsUsed);
 
-        //// 2️⃣ بررسی انقضا
-        //if (otp.ExpiresAt < DateTime.UtcNow)
-        //    return false;
+        var otp = candidates
+            .OrderByDescending(x => x.CreatedAt)
+            .FirstOrDefault();
 
-        //// 3️⃣ بررسی تعداد تلاش
-        //if (otp.AttemptCount >= MaxVerifyAttempts)
-        //    return false;
+        if (otp == null)
+        {
+            return false;
+        }
 
-        //// 4️⃣ افزایش شمارنده تلاش
-        //otp.AttemptCount++;
+        if (otp.ExpiresAt <= DateTime.UtcNow)
+        {
+            otp.IsUsed = true;
+            await _otpRepository.UpdateAsync(otp);
+            return false;
+        }
 
-        //// 5️⃣ بررسی کد
-        //if (otp.Code != code)
-        //{
-        //    await _otpRepository.UpdateAsync(otp);
-        //    return false;
-        //}
+        if (otp.AttemptCount >= MaxVerifyAttempts)
+        {
+            otp.IsUsed = true;
+            await _otpRepository.UpdateAsync(otp);
+            return false;
+        }
 
-        //// 6️⃣ موفق → مصرف OTP
-        //otp.IsUsed = true;
-        //await _otpRepository.UpdateAsync(otp);
-        
-        //TODO: uncomment this lines before publish 
+        otp.AttemptCount++;
+
+        var suppliedHash = HashOtp(code);
+        var isMatch = CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(otp.Code),
+            Encoding.UTF8.GetBytes(suppliedHash));
+
+        if (!isMatch)
+        {
+            if (otp.AttemptCount >= MaxVerifyAttempts)
+            {
+                otp.IsUsed = true;
+            }
+
+            await _otpRepository.UpdateAsync(otp);
+            return false;
+        }
+
+        otp.IsUsed = true;
+        await _otpRepository.UpdateAsync(otp);
         return true;
     }
 
-    // ============================
-    // Helper: Secure OTP Generator
-    // ============================
     private static string GenerateSecureOtp()
     {
-        return "123";
-        //return RandomNumberGenerator
-        //    .GetInt32(100000, 999999)
-        //    .ToString();
+        return RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+    }
+
+    private static string HashOtp(string code)
+    {
+        return Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes(code)));
     }
 }
