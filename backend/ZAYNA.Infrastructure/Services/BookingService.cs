@@ -111,47 +111,61 @@ namespace ZAYNA.Infrastructure.Services
         public async Task<IEnumerable<TimeSpan>> GetAvailableTimeSlotsAsync(Guid stylistId, Guid serviceId, DateTime date)
         {
             var availableSlots = new List<TimeSpan>();
+            var requestedDate = date.Date;
 
-            var offDays = await _offDayRepository.FindAsync(o =>
-                o.StylistId == stylistId &&
-                o.OffDate.Date == date.Date);
-
-            if (offDays.Any()) return availableSlots;
+            var service = await _context.Services
+                .FirstOrDefaultAsync(s => s.Id == serviceId && s.IsActive);
+            if (service == null || service.DurationMinutes <= 0)
+                return availableSlots;
 
             var stylist = await _context.Stylists
                 .Include(s => s.Branch)
                 .ThenInclude(b => b.WorkingHours)
-                .FirstOrDefaultAsync(s => s.Id == stylistId);
+                .FirstOrDefaultAsync(s => s.Id == stylistId && s.IsActive);
+            if (stylist?.Branch == null || stylist.SalonId != service.SalonId)
+                return availableSlots;
 
-            if (stylist?.Branch == null) return availableSlots;
+            var canPerformService = await _context.StylistServices.AnyAsync(ss =>
+                ss.StylistId == stylistId && ss.ServiceId == serviceId);
+            if (!canPerformService)
+                return availableSlots;
+
+            var offDays = await _offDayRepository.FindAsync(o =>
+                o.StylistId == stylistId &&
+                o.OffDate.Date == requestedDate);
+            if (offDays.Any())
+                return availableSlots;
 
             var workingHours = stylist.Branch.WorkingHours
-                .FirstOrDefault(w => (int)w.DayOfWeek == (int)date.DayOfWeek);
+                .FirstOrDefault(w => (int)w.DayOfWeek == (int)requestedDate.DayOfWeek);
+            if (workingHours == null || workingHours.IsClosed || workingHours.CloseTime <= workingHours.OpenTime)
+                return availableSlots;
 
-            if (workingHours == null || workingHours.IsClosed) return availableSlots;
+            var duration = TimeSpan.FromMinutes(service.DurationMinutes);
+            var existingBookings = await _context.Bookings
+                .Where(b => b.StylistId == stylistId &&
+                            b.BookingDate.Date == requestedDate &&
+                            b.Status != BookingStatus.Cancelled)
+                .Select(b => new { b.StartTime, b.EndTime })
+                .ToListAsync();
 
-            var existingBookings = await _bookingRepository.FindAsync(b =>
-                b.StylistId == stylistId &&
-                b.BookingDate.Date == date.Date &&
-                b.Status != BookingStatus.Cancelled);
-
+            var now = DateTime.UtcNow;
             var currentTime = workingHours.OpenTime;
-            var slotDuration = TimeSpan.FromMinutes(30);
+            var slotInterval = TimeSpan.FromMinutes(30);
 
-            while (currentTime.Add(slotDuration) <= workingHours.CloseTime)
+            while (currentTime.Add(duration) <= workingHours.CloseTime)
             {
-                var isAvailable = !existingBookings.Any(b =>
-                    currentTime >= b.StartTime && currentTime < b.EndTime);
+                var proposedEnd = currentTime.Add(duration);
+                var overlaps = existingBookings.Any(b =>
+                    currentTime < b.EndTime && proposedEnd > b.StartTime);
 
-                if (isAvailable &&
-                    (date.Date > DateTime.UtcNow.Date ||
-                    (date.Date == DateTime.UtcNow.Date &&
-                     currentTime > DateTime.UtcNow.TimeOfDay)))
-                {
+                var isFutureSlot = requestedDate > now.Date ||
+                    (requestedDate == now.Date && currentTime > now.TimeOfDay);
+
+                if (!overlaps && isFutureSlot)
                     availableSlots.Add(currentTime);
-                }
 
-                currentTime = currentTime.Add(slotDuration);
+                currentTime = currentTime.Add(slotInterval);
             }
 
             return availableSlots;

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using ZAYNA.Core.Entities;
 using ZAYNA.Core.Interfaces;
 using ZAYNA.Infrastructure.Data;
@@ -43,6 +44,12 @@ namespace ZAYNA.API.Controllers
         [HttpPost]
         public async Task<IActionResult> AddService([FromBody] CreateServiceRequest request)
         {
+            if (!await CanManageSalonAsync(request.SalonId))
+                return User.IsInRole("Admin") ? NotFound(new { success = false, message = "Salon not found" }) : Forbid();
+
+            if (request.DurationMinutes <= 0 || request.Price < 0)
+                return BadRequest(new { success = false, message = "Duration must be positive and price cannot be negative." });
+
             var service = new Service
             {
                 SalonId = request.SalonId,
@@ -70,6 +77,11 @@ namespace ZAYNA.API.Controllers
             var service = await _serviceRepository.GetByIdAsync(id);
             if (service == null)
                 return NotFound(new { success = false, message = "Service not found" });
+            if (!await CanManageSalonAsync(service.SalonId))
+                return Forbid();
+            if ((request.DurationMinutes.HasValue && request.DurationMinutes.Value <= 0) ||
+                (request.Price.HasValue && request.Price.Value < 0))
+                return BadRequest(new { success = false, message = "Duration must be positive and price cannot be negative." });
 
             service.ServiceName = request.ServiceName ?? service.ServiceName;
             service.ServiceNameAr = request.ServiceNameAr ?? service.ServiceNameAr;
@@ -95,10 +107,21 @@ namespace ZAYNA.API.Controllers
             var service = await _serviceRepository.GetByIdAsync(id);
             if (service == null)
                 return NotFound(new { success = false, message = "Service not found" });
+            if (!await CanManageSalonAsync(service.SalonId))
+                return Forbid();
 
             service.IsActive = false;
             await _serviceRepository.UpdateAsync(service);
             return Ok(new { success = true, message = "Service deactivated" });
+        }
+        private async Task<bool> CanManageSalonAsync(Guid salonId)
+        {
+            if (User.IsInRole("Admin"))
+                return await _context.Salons.AnyAsync(s => s.Id == salonId);
+
+            var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            return Guid.TryParse(userIdValue, out var userId) &&
+                   await _context.Salons.AnyAsync(s => s.Id == salonId && s.UserId == userId);
         }
     }
 
