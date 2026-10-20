@@ -26,6 +26,7 @@ import Reports from './components/admin/Reports';
 import Users from './components/admin/Users';
 import ComingSoon from './components/common/ComingSoon';
 import Footer from './components/common/Footer.tsx';
+import Home from './components/common/Home.jsx';
 import Sidebar from './components/common/Sidebar';
 import ClaimSalon from './components/claim/ClaimSalon';
 import SalonDetail from './components/customer/SalonDetail';
@@ -45,6 +46,7 @@ function App() {
           <div className="App">
             <Routes>
               {/* Public Routes */}
+              <Route path="/home" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<WizardRegistration />} />
               <Route path="/salons" element={<SalonList />} />
@@ -143,7 +145,7 @@ function App() {
               />
 
               {/* Default Route */}
-              <Route path="/" element={<Navigate to="/salons" />} />
+              <Route path="/" element={<Home/>} />
             </Routes>
 
             <ToastContainer

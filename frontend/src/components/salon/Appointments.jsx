@@ -4,11 +4,18 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../common/Layout';
+import { salonService } from '../../services/salonService';
+import { useAuth } from '../../contexts/AuthContext';
+
 import { FiCalendar, FiSearch, FiFilter } from 'react-icons/fi';
 import { format } from 'date-fns';
 
+
+
 const Appointments = () => {
   const { t } = useTranslation();
+      const { user } = useAuth();
+  
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [filter, setFilter] = useState('all');
   const [appointments, setAppointments] = useState([
@@ -45,7 +52,22 @@ const Appointments = () => {
       status: 'Confirmed',
       notes: 'Regular customer',
     },
-  ]);
+  ]
+);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+            const salon = await salonService.getSalonByUserId(user?.userId);
+            const bookings = await salonService.getSalonBookings(salon?.salon.id);
+      console.log(bookings);
+      
+          }
+    catch{};
+        };
 
   const filteredAppointments = appointments.filter((apt) => {
     if (filter === 'all') return true;
@@ -57,6 +79,8 @@ const Appointments = () => {
       appointments.map((apt) => (apt.id === id ? { ...apt, status: newStatus } : apt))
     );
   };
+
+
 
   return (
     <Layout>

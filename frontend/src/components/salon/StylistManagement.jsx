@@ -31,13 +31,16 @@ export default function StylistManagement() {
     <Layout>
     <div className="max-w-7xl mx-auto">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-dark-brown">{t('stylists')}</h1>
+                <div className="ltr:ml-8 rtl:mr-8">
+
+          <h1 className="text-3xl font-bold text-primary mb-8">{t('salon.stylists')}</h1>
+          </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-emerald-green text-white px-6 py-3 rounded-lg hover:bg-opacity-90"
+          className="flex items-center gap-2 btn-primary text-sm py-2 px-6 py-3 rounded-lg hover:bg-opacity-90"
         >
           <FiPlus size={20} />
-          {t('add_stylist')}
+          {t('salon.addStylist')}
         </button>
       </div>
 
