@@ -126,10 +126,14 @@ namespace Zayna.API.Controllers
                     });
                 }
 
+                await _bookingService.CancelBookingAsync(
+                    createdBooking.Id,
+                    "Online payment initialization failed.");
+
                 return StatusCode(StatusCodes.Status502BadGateway, new
                 {
                     success = false,
-                    message = "Unable to initialize online payment."
+                    message = "Unable to initialize online payment. Please try booking again."
                 });
             }
 
