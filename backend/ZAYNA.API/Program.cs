@@ -66,13 +66,46 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Database
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("saleh"),b=> b.MigrationsAssembly("ZAYNA.API")));
+// Database configuration: use one canonical key across environments.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:DefaultConnection must be configured.");
+}
 
-// JWT Authentication
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString, b => b.MigrationsAssembly("ZAYNA.API")));
+
+// JWT configuration: fail at startup rather than signing tokens with a known placeholder.
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]);
+var jwtSecret = jwtSettings["SecretKey"];
+var jwtIssuer = jwtSettings["Issuer"];
+var jwtAudience = jwtSettings["Audience"];
+var expiryHoursValue = jwtSettings["ExpiryHours"];
+
+if (string.IsNullOrWhiteSpace(jwtSecret) ||
+    jwtSecret.Length < 32 ||
+    jwtSecret.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase) ||
+    jwtSecret.Contains("CHANGE_THIS", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey must be set to a private, random secret of at least 32 characters.");
+}
+
+if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience))
+{
+    throw new InvalidOperationException(
+        "JwtSettings:Issuer and JwtSettings:Audience must both be configured.");
+}
+
+if (!int.TryParse(expiryHoursValue, out var expiryHours) || expiryHours <= 0)
+{
+    throw new InvalidOperationException(
+        "JwtSettings:ExpiryHours must be a positive integer.");
+}
+
+var secretKey = Encoding.UTF8.GetBytes(jwtSecret);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -87,8 +120,8 @@ builder.Services.AddAuthentication(options =>
         ValidateAudience = true,
         ValidateLifetime = true,
         ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtSettings["Issuer"],
-        ValidAudience = jwtSettings["Audience"],
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(secretKey),
         ClockSkew = TimeSpan.Zero
     };
