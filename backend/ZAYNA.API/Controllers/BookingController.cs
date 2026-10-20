@@ -92,6 +92,22 @@ namespace Zayna.API.Controllers
                 return BadRequest(new { success = false, message = "Invalid or unavailable stylist for this salon and branch." });
             }
 
+            if (request.BookingDate.Date < DateTime.UtcNow.Date ||
+                request.StartTime < TimeSpan.Zero ||
+                request.StartTime >= TimeSpan.FromDays(1) ||
+                service.DurationMinutes <= 0 ||
+                request.StartTime.Add(TimeSpan.FromMinutes(service.DurationMinutes)) > TimeSpan.FromDays(1))
+            {
+                return BadRequest(new { success = false, message = "Invalid booking date, time, or service duration." });
+            }
+
+            var availableSlots = await _bookingService.GetAvailableTimeSlotsAsync(
+                request.StylistId, request.ServiceId, request.BookingDate);
+            if (!availableSlots.Contains(request.StartTime))
+            {
+                return Conflict(new { success = false, message = "The selected time slot is unavailable. Please choose another time." });
+            }
+
             if (!Enum.IsDefined(typeof(PaymentType), request.PaymentType))
                 return BadRequest(new { success = false, message = "Invalid payment type." });
 
@@ -126,10 +142,14 @@ namespace Zayna.API.Controllers
                     });
                 }
 
+                await _bookingService.CancelBookingAsync(
+                    createdBooking.Id,
+                    "Online payment initialization failed.");
+
                 return StatusCode(StatusCodes.Status502BadGateway, new
                 {
                     success = false,
-                    message = "Unable to initialize online payment."
+                    message = "Unable to initialize online payment. Please try booking again."
                 });
             }
 
