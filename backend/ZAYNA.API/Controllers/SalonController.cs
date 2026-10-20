@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using System.Security.Claims;
 using Zayna.Core.DTOs;
 using ZAYNA.Core.Entities;
 using ZAYNA.Core.Enums;
@@ -136,7 +137,7 @@ namespace ZAYNA.API.Controllers
         /// <summary>
         /// Get salon by User ID
         /// </summary>
-        [AllowAnonymous]
+        [Authorize(Roles = "Salon,Admin")]
         [HttpGet("getSalonByUserId/{id}")]
         public async Task<IActionResult> GetSalonByUserId(Guid id)
         {
@@ -187,6 +188,8 @@ namespace ZAYNA.API.Controllers
             var salon = await _salonRepository.GetByIdAsync(id);
             if (salon == null)
                 return NotFound(new { success = false, message = "Salon not found" });
+            if (!await CanManageSalonAsync(id))
+                return Forbid();
 
             salon.SalonName = request.SalonName ?? salon.SalonName;
             salon.SalonNameAr = request.SalonNameAr ?? salon.SalonNameAr;
@@ -224,6 +227,9 @@ namespace ZAYNA.API.Controllers
         [HttpPost("{salonId}/branches")]
         public async Task<IActionResult> AddBranch(Guid salonId, [FromBody] CreateBranchRequest request)
         {
+            if (!await CanManageSalonAsync(salonId))
+                return Forbid();
+
             var branch = new Branch
             {
                 SalonId = salonId,
@@ -253,6 +259,8 @@ namespace ZAYNA.API.Controllers
             var branch = await _branchRepository.GetByIdAsync(branchId);
             if (branch == null)
                 return NotFound(new { success = false, message = "Branch not found" });
+            if (!await CanManageSalonAsync(branch.SalonId))
+                return Forbid();
 
             branch.BranchName = request.BranchName ?? branch.BranchName;
             branch.BranchNameAr = request.BranchNameAr ?? branch.BranchNameAr;
@@ -288,6 +296,16 @@ namespace ZAYNA.API.Controllers
         [HttpPost("{salonId}/stylists")]
         public async Task<IActionResult> AddStylist(Guid salonId, [FromBody] CreateStylistRequest request)
         {
+            if (!await CanManageSalonAsync(salonId))
+                return Forbid();
+
+            if (request.BranchId.HasValue &&
+                !await _context.Branches.AnyAsync(b => b.Id == request.BranchId.Value && b.SalonId == salonId))
+                return BadRequest(new { success = false, message = "Branch does not belong to this salon." });
+
+            if (await _context.Users.AnyAsync(u => u.PhoneNumber == request.PhoneNumber))
+                return Conflict(new { success = false, message = "A user with this phone number already exists." });
+
             // Create user account for stylist
             var user = new User
             {
@@ -313,6 +331,21 @@ namespace ZAYNA.API.Controllers
 
             await _stylistRepository.AddAsync(stylist);
             return Ok(new { success = true, stylist });
+        }
+
+        private bool TryGetCurrentUserId(out Guid userId)
+        {
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            return Guid.TryParse(value, out userId);
+        }
+
+        private async Task<bool> CanManageSalonAsync(Guid salonId)
+        {
+            if (User.IsInRole("Admin"))
+                return await _context.Salons.AnyAsync(s => s.Id == salonId);
+
+            return TryGetCurrentUserId(out var userId) &&
+                   await _context.Salons.AnyAsync(s => s.Id == salonId && s.UserId == userId);
         }
     }
 
