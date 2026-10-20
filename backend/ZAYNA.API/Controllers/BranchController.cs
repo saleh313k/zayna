@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using ZAYNA.Core.Entities;
 using ZAYNA.Infrastructure.Data;
 
@@ -45,10 +46,17 @@ namespace ZAYNA.API.Controllers
         {
             var branch = await _context.Branches
                 .Include(b => b.WorkingHours)
+                .Include(b => b.Salon)
                 .FirstOrDefaultAsync(b => b.Id == branchId);
 
             if (branch == null)
                 return NotFound(new { success = false, message = "Branch not found" });
+            if (!await CanManageSalonAsync(branch.SalonId))
+                return Forbid();
+            if (workingHours == null || workingHours.Any(wh =>
+                wh.OpenTime < TimeSpan.Zero || wh.CloseTime > TimeSpan.FromDays(1) ||
+                (!wh.IsClosed && wh.CloseTime <= wh.OpenTime)))
+                return BadRequest(new { success = false, message = "Working hours are invalid." });
 
             // Remove existing working hours
             _context.BranchWorkingHours.RemoveRange(branch.WorkingHours);
@@ -108,6 +116,16 @@ namespace ZAYNA.API.Controllers
                 .ToList();
 
             return Ok(new { success = true, branches = nearbyBranches });
+        }
+
+        private async Task<bool> CanManageSalonAsync(Guid salonId)
+        {
+            if (User.IsInRole("Admin"))
+                return await _context.Salons.AnyAsync(s => s.Id == salonId);
+
+            var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            return Guid.TryParse(userIdValue, out var userId) &&
+                   await _context.Salons.AnyAsync(s => s.Id == salonId && s.UserId == userId);
         }
 
         private double CalculateDistance(double lat1, double lon1, double lat2, double lon2)
