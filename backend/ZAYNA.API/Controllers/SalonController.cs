@@ -141,10 +141,13 @@ namespace ZAYNA.API.Controllers
         [HttpGet("getSalonByUserId/{id}")]
         public async Task<IActionResult> GetSalonByUserId(Guid id)
         {
-            if (!User.IsInRole("Admin") && !TryGetCurrentUserId(out var currentUserId))
-                return Unauthorized();
-            if (!User.IsInRole("Admin") && currentUserId != id)
-                return Forbid();
+            if (!User.IsInRole("Admin"))
+            {
+                if (!TryGetCurrentUserId(out var currentUserId))
+                    return Unauthorized();
+                if (currentUserId != id)
+                    return Forbid();
+            }
 
             var salon = await _context.Salons
     .Where(s => s.IsVerified && s.UserId == id)
