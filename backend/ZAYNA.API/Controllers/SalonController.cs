@@ -141,6 +141,10 @@ namespace ZAYNA.API.Controllers
         [HttpGet("getSalonByUserId/{id}")]
         public async Task<IActionResult> GetSalonByUserId(Guid id)
         {
+            if (!User.IsInRole("Admin") && !TryGetCurrentUserId(out var currentUserId))
+                return Unauthorized();
+            if (!User.IsInRole("Admin") && currentUserId != id)
+                return Forbid();
 
             var salon = await _context.Salons
     .Where(s => s.IsVerified && s.UserId == id)
@@ -209,9 +213,13 @@ namespace ZAYNA.API.Controllers
         /// <summary>
         /// Get salon branches
         /// </summary>
+        [Authorize(Roles = "Salon,Admin")]
         [HttpGet("{salonId}/branches")]
         public async Task<IActionResult> GetSalonBranches(Guid salonId)
         {
+            if (!await CanManageSalonAsync(salonId))
+                return Forbid();
+
             var branches = await _context.Branches
                 .Include(b => b.WorkingHours)
                 .Where(b => b.SalonId == salonId)
@@ -277,9 +285,13 @@ namespace ZAYNA.API.Controllers
         /// <summary>
         /// Get salon stylists
         /// </summary>
+        [Authorize(Roles = "Salon,Admin")]
         [HttpGet("{salonId}/stylists")]
         public async Task<IActionResult> GetSalonStylists(Guid salonId)
         {
+            if (!await CanManageSalonAsync(salonId))
+                return Forbid();
+
             var stylists = await _context.Stylists
                 .Include(s => s.StylistServices)
                     .ThenInclude(ss => ss.Service)
