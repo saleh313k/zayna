@@ -106,6 +106,14 @@ namespace Zayna.Infrastructure.Services
                 CreatedAt = DateTime.UtcNow
             };
 
+            // Create the customer profile together with the user so newly registered
+            // customers can own bookings through the Customer entity's separate Id.
+            user.Customer = new Customer
+            {
+                User = user,
+                FullName = user.FullName
+            };
+
             await _userRepository.AddAsync(user);
 
             // 4. Generate token
