@@ -127,21 +127,45 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-// CORS
+// Google Sign-In: the server verifies Google ID tokens against this client id.
+var googleClientId = builder.Configuration["GoogleSettings:ClientId"];
+if (string.IsNullOrWhiteSpace(googleClientId) ||
+    googleClientId.StartsWith("YOUR_", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "GoogleSettings:ClientId must be configured (Google Cloud Console > Credentials > OAuth client ID).");
+}
+
+// CORS: explicit allow-list from configuration (Cors:AllowedOrigins, comma-separated).
+var allowedOrigins = (builder.Configuration["Cors:AllowedOrigins"] ?? string.Empty)
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+if (allowedOrigins.Length == 0 && builder.Environment.IsDevelopment())
+{
+    allowedOrigins = new[] { "http://localhost:5173", "http://localhost:3000" };
+}
+
+if (allowedOrigins.Length == 0)
+{
+    throw new InvalidOperationException(
+        "Cors:AllowedOrigins must list the public frontend origin(s), e.g. https://app.example.com");
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
+        // Auth uses a bearer token header, not cookies, so credentials are not needed.
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowAnyMethod();
     });
 });
 
 // Register Services
 builder.Services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();
 builder.Services.AddScoped<IEmailService, SendGridEmailService>();
 builder.Services.AddScoped<IPaymentService, ThawaniPaymentService>();
@@ -160,6 +184,9 @@ builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
+// Must be first so it wraps routing, auth and controllers.
+app.UseMiddleware<GlobalExceptionMiddleware>();
+
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
@@ -176,20 +203,24 @@ app.UseCors("AllowReactApp");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-app.UseMiddleware<GlobalExceptionMiddleware>();
-// Seed database
+// Apply migrations and bootstrap data. A failure here must stop startup: running against a
+// missing or outdated schema would only fail later, at the user's expense.
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        await DbInitializer.Initialize(context);
+        await DbInitializer.Initialize(
+            context,
+            builder.Configuration["Admin:Email"],
+            seedDemoData: app.Environment.IsDevelopment());
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while seeding the database.");
+        logger.LogCritical(ex, "Database migration/initialisation failed. Shutting down.");
+        throw;
     }
 }
 

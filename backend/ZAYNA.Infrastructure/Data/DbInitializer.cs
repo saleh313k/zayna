@@ -1,56 +1,77 @@
-// ZAYNA.Infrastructure/Data/DbInitializer.cs
-using System;
-using System.Linq;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-using ZAYNA.Core.Entities;
-using ZAYNA.Infrastructure.Data;
 using ZAYNA.Core.Enums;
 
 namespace ZAYNA.Infrastructure.Data
 {
     public static class DbInitializer
     {
-        public static async Task Initialize(ApplicationDbContext context)
+        /// <summary>
+        /// Applies EF Core migrations, bootstraps the admin account, and (development only) seeds demo data.
+        /// </summary>
+        /// <param name="adminEmail">
+        /// Email of the platform administrator (config key Admin:Email). The admin signs in with Google using
+        /// this address. No password and no hardcoded credentials are ever created.
+        /// </param>
+        /// <param name="seedDemoData">Only true in the Development environment.</param>
+        public static async Task Initialize(ApplicationDbContext context, string? adminEmail, bool seedDemoData)
         {
-            // Ensure database is created
-            await context.Database.EnsureCreatedAsync();
+            // Never EnsureCreated: it bypasses migrations and makes later schema updates impossible.
+            await context.Database.MigrateAsync();
 
-            // Check if admin user exists
-            if (context.Users.Any(u => u.Role == UserRole.Admin))
+            await EnsureAdminAsync(context, adminEmail);
+
+            if (seedDemoData)
+                await SeedDemoSalonAsync(context);
+        }
+
+        private static async Task EnsureAdminAsync(ApplicationDbContext context, string? adminEmail)
+        {
+            if (string.IsNullOrWhiteSpace(adminEmail))
+                return;
+
+            var email = adminEmail.Trim().ToLowerInvariant();
+            var user = await context.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            if (user == null)
             {
-                return; // DB has been seeded
+                context.Users.Add(new User
+                {
+                    Email = email,
+                    FullName = "Administrator",
+                    Role = UserRole.Admin,
+                    IsActive = true,
+                    IsEmailVerified = true, // required so the Google sign-in can link to this account
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                });
+                await context.SaveChangesAsync();
             }
-
-            // Create admin user
-            var adminUser = new User
+            else if (user.Role != UserRole.Admin || !user.IsEmailVerified)
             {
-                PhoneNumber = "+96812345678",
-                Email = "admin@zayna.om",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
-                Role = UserRole.Admin,
+                // Operator-controlled configuration is the source of truth for who the admin is.
+                user.Role = UserRole.Admin;
+                user.IsEmailVerified = true;
+                user.UpdatedAt = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+            }
+        }
+
+        private static async Task SeedDemoSalonAsync(ApplicationDbContext context)
+        {
+            if (await context.Salons.AnyAsync())
+                return;
+
+            var salonUser = new User
+            {
+                PhoneNumber = "+96887654321",
+                Email = "salon@zayna.om",
+                FullName = "Demo Salon Owner",
+                Role = UserRole.Salon,
                 IsActive = true,
                 IsPhoneVerified = true,
                 IsEmailVerified = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-
-            context.Users.Add(adminUser);
-            await context.SaveChangesAsync();
-
-            // Seed sample salon
-            var salonUser = new User
-            {
-                PhoneNumber = "+96887654321",
-                Email = "salon@zayna.om",
-                Role = UserRole.Salon,
-                IsActive = true,
-                IsPhoneVerified = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
             context.Users.Add(salonUser);
             await context.SaveChangesAsync();
 
@@ -69,11 +90,9 @@ namespace ZAYNA.Infrastructure.Data
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-
             context.Salons.Add(salon);
             await context.SaveChangesAsync();
 
-            // Seed branch
             var branch = new Branch
             {
                 SalonId = salon.Id,
@@ -82,89 +101,32 @@ namespace ZAYNA.Infrastructure.Data
                 AddressLine = "Al Khuwair, Muscat",
                 City = "Muscat",
                 Region = "Muscat Governorate",
-                Latitude = (double)23.5880m,
-                Longitude =(double) 58.3829m,
+                Latitude = 23.5880,
+                Longitude = 58.3829,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-
             context.Branches.Add(branch);
             await context.SaveChangesAsync();
 
-            // Seed working hours
-            var workingHours = new List<BranchWorkingHours>();
             for (int day = 0; day <= 6; day++)
             {
-                if (day == 5) // Friday closed
+                context.BranchWorkingHours.Add(new BranchWorkingHours
                 {
-                    workingHours.Add(new BranchWorkingHours
-                    {
-                        BranchId = branch.Id,
-                        DayOfWeek = (System.DayOfWeek)day,
-                        OpenTime = TimeSpan.FromHours(9),
-                        CloseTime = TimeSpan.FromHours(21),
-                        IsClosed = true
-                    });
-                }
-                else
-                {
-                    workingHours.Add(new BranchWorkingHours
-                    {
-                        BranchId = branch.Id,
-                        DayOfWeek = (System.DayOfWeek)day,
-                        OpenTime = TimeSpan.FromHours(9),
-                        CloseTime = TimeSpan.FromHours(21),
-                        IsClosed = false
-                    });
-                }
+                    BranchId = branch.Id,
+                    DayOfWeek = (System.DayOfWeek)day,
+                    OpenTime = TimeSpan.FromHours(9),
+                    CloseTime = TimeSpan.FromHours(21),
+                    IsClosed = day == 5 // Friday closed
+                });
             }
-
-            context.BranchWorkingHours.AddRange(workingHours);
             await context.SaveChangesAsync();
 
-            // Seed services
-            var services = new List<Service>
-            {
-                new Service
-                {
-                    SalonId = salon.Id,
-                    ServiceName = "Haircut",
-                    ServiceNameAr = "قص شعر",
-                    Description = "Professional haircut service",
-                    DescriptionAr = "خدمة قص شعر احترافية",
-                    DurationMinutes = 30,
-                    Price = 10.0m,
-                    Category = "Haircut",
-                    IsActive = true
-                },
-                new Service
-                {
-                    SalonId = salon.Id,
-                    ServiceName = "Hair Coloring",
-                    ServiceNameAr = "صبغ الشعر",
-                    Description = "Premium hair coloring",
-                    DescriptionAr = "صبغ شعر فاخر",
-                    DurationMinutes = 90,
-                    Price = 25.0m,
-                    Category = "Coloring",
-                    IsActive = true
-                },
-                new Service
-                {
-                    SalonId = salon.Id,
-                    ServiceName = "Facial Treatment",
-                    ServiceNameAr = "علاج للوجه",
-                    Description = "Deep cleansing facial",
-                    DescriptionAr = "تنظيف عميق للوجه",
-                    DurationMinutes = 60,
-                    Price = 20.0m,
-                    Category = "Facial",
-                    IsActive = true
-                }
-            };
-
-            context.Services.AddRange(services);
+            context.Services.AddRange(
+                new Service { SalonId = salon.Id, ServiceName = "Haircut", ServiceNameAr = "قص شعر", Description = "Professional haircut service", DescriptionAr = "خدمة قص شعر احترافية", DurationMinutes = 30, Price = 10.0m, Category = "Haircut", IsActive = true },
+                new Service { SalonId = salon.Id, ServiceName = "Hair Coloring", ServiceNameAr = "صبغ الشعر", Description = "Premium hair coloring", DescriptionAr = "صبغ شعر فاخر", DurationMinutes = 90, Price = 25.0m, Category = "Coloring", IsActive = true },
+                new Service { SalonId = salon.Id, ServiceName = "Facial Treatment", ServiceNameAr = "علاج للوجه", Description = "Deep cleansing facial", DescriptionAr = "تنظيف عميق للوجه", DurationMinutes = 60, Price = 20.0m, Category = "Facial", IsActive = true });
             await context.SaveChangesAsync();
         }
     }

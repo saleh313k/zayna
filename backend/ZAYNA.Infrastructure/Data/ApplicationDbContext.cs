@@ -40,9 +40,13 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasKey(e => e.Id);
+            // PhoneNumber and Email are both optional (Google users have no phone; OTP users may have no email)
+            // but unique when present. EF/SQL Server emit a filtered unique index (WHERE col IS NOT NULL).
             entity.HasIndex(e => e.PhoneNumber).IsUnique();
+            entity.HasIndex(e => e.Email).IsUnique();
             entity.Property(e => e.FullName).HasMaxLength(100).IsRequired();
-            entity.Property(e => e.PhoneNumber).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.PhoneNumber).HasMaxLength(20);
+            entity.Property(e => e.Email).HasMaxLength(256);
         });
 
         // Customer
