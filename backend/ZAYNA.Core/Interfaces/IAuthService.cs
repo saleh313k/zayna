@@ -12,7 +12,8 @@ namespace Zayna.Core.Interfaces
     {
         Task<AuthResponseDto> LoginWithPhoneAsync(string phoneNumber, string otpCode, UserLanguage userLanguage);
         Task<AuthResponseDto> RegisterAsync(RegisterDto dto);
-        Task<AuthResponseDto> LoginWithSocialAsync(SocialLoginDto dto);
+        Task<AuthResponseDto> LoginWithGoogleAsync(string idToken);
+        Task<AuthResponseDto> RegisterSalonAsync(Guid userId, RegisterSalonDto dto);
         Task<string> GenerateTokenAsync(Guid userId);
         Task<bool> ValidateTokenAsync(string token);
     }

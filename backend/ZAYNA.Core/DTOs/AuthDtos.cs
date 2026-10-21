@@ -24,15 +24,19 @@ namespace Zayna.Core.DTOs
         public UserLanguage UserLanguage { get; set; }
     }
 
-    public class SocialLoginDto
+    public class GoogleLoginDto
     {
-        public SocialProvider Provider { get; set; }
-        public string AccessToken { get; set; } = string.Empty;
-        public string Email { get; set; } = string.Empty;
-        public string FullName { get; set; } = string.Empty;
-        public string ExternalId { get; set; } = string.Empty;
-        public string ProviderUserId { get; set; } = string.Empty;
+        /// <summary>The Google ID token (JWT credential) returned by Google Sign-In.</summary>
+        public string IdToken { get; set; } = string.Empty;
+    }
 
+    public class RegisterSalonDto
+    {
+        public string SalonName { get; set; } = string.Empty;
+        public string? SalonNameAr { get; set; }
+        public string ContactPhone { get; set; } = string.Empty;
+        public string City { get; set; } = string.Empty;
+        public string AddressLine { get; set; } = string.Empty;
     }
 
     public class AuthResponseDto

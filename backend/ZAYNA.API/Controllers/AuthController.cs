@@ -1,5 +1,7 @@
 // ZAYNA.API/Controllers/AuthController.cs
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using Zayna.Core.DTOs;
 using Zayna.Core.Interfaces;
 using ZAYNA.Core.Enums;
@@ -102,12 +104,31 @@ namespace Zayna.API.Controllers
         }
 
         /// <summary>
-        /// Log in with a social provider.
+        /// Sign in (or sign up as a Customer) with a Google ID token. The token is verified server-side.
         /// </summary>
-        [HttpPost("social-login")]
-        public async Task<IActionResult> SocialLogin([FromBody] SocialLoginDto dto)
+        [HttpPost("google")]
+        public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto dto)
         {
-            var response = await _authService.LoginWithSocialAsync(dto);
+            if (string.IsNullOrWhiteSpace(dto.IdToken))
+                return BadRequest(new { success = false, message = "A Google ID token is required." });
+
+            var response = await _authService.LoginWithGoogleAsync(dto.IdToken);
+            return Ok(response);
+        }
+
+        /// <summary>
+        /// Upgrade the signed-in Customer to a Salon owner. The salon stays hidden from the public
+        /// until an admin approves it. Returns a fresh token carrying the Salon role.
+        /// </summary>
+        [Authorize(Roles = "Customer")]
+        [HttpPost("register-salon")]
+        public async Task<IActionResult> RegisterSalon([FromBody] RegisterSalonDto dto)
+        {
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            if (!Guid.TryParse(value, out var userId))
+                return Unauthorized();
+
+            var response = await _authService.RegisterSalonAsync(userId, dto);
             return Ok(response);
         }
     }

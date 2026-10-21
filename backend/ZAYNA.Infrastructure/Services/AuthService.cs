@@ -1,13 +1,12 @@
-﻿using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Twilio.Exceptions;
 using Zayna.Core.DTOs;
 using Zayna.Core.Exceptions;
 using Zayna.Core.Interfaces;
 using ZAYNA.Core.Enums;
+using ZAYNA.Infrastructure.Data;
 
 namespace Zayna.Infrastructure.Services
 {
@@ -16,159 +15,237 @@ namespace Zayna.Infrastructure.Services
         private readonly IRepository<User> _userRepository;
         private readonly IOtpService _otpService;
         private readonly IConfiguration _configuration;
+        private readonly IGoogleTokenVerifier _googleVerifier;
+        private readonly ApplicationDbContext _context;
 
         public AuthService(
             IRepository<User> userRepository,
             IOtpService otpService,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            IGoogleTokenVerifier googleVerifier,
+            ApplicationDbContext context)
         {
             _userRepository = userRepository;
             _otpService = otpService;
             _configuration = configuration;
+            _googleVerifier = googleVerifier;
+            _context = context;
         }
 
         // =========================================================
-        // LOGIN (Phone + OTP)
+        // GOOGLE SIGN-IN (primary MVP login method)
+        // =========================================================
+        public async Task<AuthResponseDto> LoginWithGoogleAsync(string idToken)
+        {
+            var identity = await _googleVerifier.VerifyAsync(idToken);
+            if (identity == null)
+                throw new AppException("GOOGLE_TOKEN_INVALID", "Google sign-in could not be verified. Please try again.");
+
+            if (!identity.EmailVerified || string.IsNullOrWhiteSpace(identity.Email))
+                throw new AppException("GOOGLE_EMAIL_UNVERIFIED", "Your Google account email must be verified.");
+
+            var email = identity.Email.Trim().ToLowerInvariant();
+
+            // 1. Returning Google user
+            var user = await _context.Users
+                .Include(u => u.SocialAuthProviders)
+                .FirstOrDefaultAsync(u => u.SocialAuthProviders.Any(p =>
+                    p.Provider == SocialProvider.Google && p.ProviderUserId == identity.Subject));
+
+            if (user == null)
+            {
+                // 2. Existing account with the same email (e.g. the bootstrap admin or seeded demo user).
+                //    Only link when that account's email is already verified, so nobody can pre-register
+                //    someone else's address and capture their later Google sign-in.
+                user = await _context.Users
+                    .Include(u => u.SocialAuthProviders)
+                    .FirstOrDefaultAsync(u => u.Email == email);
+
+                if (user != null)
+                {
+                    if (!user.IsEmailVerified)
+                        throw new AppException("EMAIL_IN_USE", "This email is already registered. Please contact support.");
+
+                    user.SocialAuthProviders.Add(new SocialAuthProvider
+                    {
+                        Provider = SocialProvider.Google,
+                        ProviderUserId = identity.Subject,
+                        Email = email
+                    });
+                }
+                else
+                {
+                    // 3. Brand-new user: always a Customer. Salon owners upgrade via RegisterSalonAsync.
+                    var fullName = string.IsNullOrWhiteSpace(identity.Name) ? email : identity.Name.Trim();
+                    if (fullName.Length > 100) fullName = fullName[..100];
+
+                    user = new User
+                    {
+                        Email = email,
+                        FullName = fullName,
+                        Role = UserRole.Customer,
+                        IsEmailVerified = true,
+                        IsActive = true,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    user.Customer = new Customer { User = user, FullName = fullName };
+                    user.SocialAuthProviders.Add(new SocialAuthProvider
+                    {
+                        Provider = SocialProvider.Google,
+                        ProviderUserId = identity.Subject,
+                        Email = email
+                    });
+                    _context.Users.Add(user);
+                }
+            }
+
+            if (!user.IsActive)
+                throw new AppException("USER_DISABLED", "This account has been disabled.");
+
+            // A user created by an admin/seed may lack a customer profile; ensure Customers have one.
+            if (user.Role == UserRole.Customer && !await _context.Customers.AnyAsync(c => c.UserId == user.Id) && user.Customer == null)
+            {
+                user.Customer = new Customer { User = user, FullName = user.FullName };
+            }
+
+            await _context.SaveChangesAsync();
+
+            return await BuildResponseAsync(user);
+        }
+
+        // =========================================================
+        // SALON ONBOARDING (customer -> salon owner, pending admin approval)
+        // =========================================================
+        public async Task<AuthResponseDto> RegisterSalonAsync(Guid userId, RegisterSalonDto dto)
+        {
+            var salonName = dto.SalonName?.Trim() ?? "";
+            var phone = dto.ContactPhone?.Trim() ?? "";
+            var city = dto.City?.Trim() ?? "";
+            var address = dto.AddressLine?.Trim() ?? "";
+
+            if (salonName.Length is < 2 or > 100 ||
+                phone.Length is < 6 or > 20 ||
+                city.Length is < 2 or > 100 ||
+                address.Length is < 2 or > 200)
+            {
+                throw new AppException("VALIDATION_FAILED",
+                    "Salon name, contact phone, city and address are required and must be a reasonable length.");
+            }
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null || !user.IsActive)
+                throw new AppException("USER_NOT_FOUND", "User not found");
+
+            if (user.Role != UserRole.Customer)
+                throw new AppException("ROLE_NOT_ALLOWED", "Only customer accounts can be upgraded to a salon account.");
+
+            if (await _context.Salons.AnyAsync(s => s.UserId == userId))
+                throw new AppException("SALON_EXISTS", "A salon is already registered for this account.");
+
+            var now = DateTime.UtcNow;
+            var salon = new Salon
+            {
+                UserId = userId,
+                SalonName = salonName,
+                SalonNameAr = string.IsNullOrWhiteSpace(dto.SalonNameAr) ? null : dto.SalonNameAr.Trim(),
+                ContactPhone = phone,
+                ContactEmail = user.Email,
+                IsVerified = false, // hidden from public listings until an admin approves
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            var branch = new Branch
+            {
+                Salon = salon,
+                BranchName = "Main Branch",
+                BranchNameAr = "الفرع الرئيسي",
+                AddressLine = address,
+                City = city,
+                PhoneNumber = phone,
+                IsActive = true,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            // Sensible defaults so the salon can accept bookings once approved; editable via
+            // PUT /api/branch/{branchId}/working-hours. Friday closed, matching the existing seed data.
+            for (int day = 0; day <= 6; day++)
+            {
+                branch.WorkingHours.Add(new BranchWorkingHours
+                {
+                    DayOfWeek = (System.DayOfWeek)day,
+                    OpenTime = TimeSpan.FromHours(9),
+                    CloseTime = TimeSpan.FromHours(21),
+                    IsClosed = day == 5
+                });
+            }
+
+            user.Role = UserRole.Salon;
+            user.UpdatedAt = now;
+
+            _context.Salons.Add(salon);
+            _context.Branches.Add(branch);
+            await _context.SaveChangesAsync(); // single SaveChanges = single transaction
+
+            return await BuildResponseAsync(user);
+        }
+
+        // =========================================================
+        // LOGIN (Phone + OTP) - dormant until an SMS provider is configured
         // =========================================================
         public async Task<AuthResponseDto> LoginWithPhoneAsync(string phoneNumber, string otpCode, UserLanguage userLanguage)
         {
-            // 1. Verify OTP for LOGIN purpose
-            var otpValid = await _otpService.VerifyOtpAsync(
-                phoneNumber,
-                otpCode,
-                OTPPurpose.Login,
-                userLanguage
-
-            );
-
+            var otpValid = await _otpService.VerifyOtpAsync(phoneNumber, otpCode, OTPPurpose.Login, userLanguage);
             if (!otpValid)
                 throw new AppException("OTP_INVALID", "Invalid or expired OTP");
 
-            // 2. Check user existence
-            var user = await _userRepository.FirstOrDefaultAsync(
-                u => u.PhoneNumber == phoneNumber
-            );
-
-            // 3. If not exists → BLOCK LOGIN
+            var user = await _userRepository.FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
             if (user == null)
                 throw new AppException("USER_NOT_FOUND", "User not found");
 
-            // 4. Ensure phone verified flag
+            if (!user.IsActive)
+                throw new AppException("USER_DISABLED", "This account has been disabled.");
+
             if (!user.IsPhoneVerified)
             {
                 user.IsPhoneVerified = true;
                 await _userRepository.UpdateAsync(user);
             }
 
-            // 5. Generate token
-            var token = await GenerateTokenAsync(user.Id);
-
-            return new AuthResponseDto
-            {
-                UserId = user.Id,
-                Token = token,
-                Role = user.Role
-            };
+            return await BuildResponseAsync(user);
         }
 
         // =========================================================
-        // REGISTER
+        // REGISTER (Phone + OTP) - dormant until an SMS provider is configured
         // =========================================================
         public async Task<AuthResponseDto> RegisterAsync(RegisterDto dto)
         {
-            // 1. Verify OTP for REGISTRATION purpose
-            var otpValid = await _otpService.VerifyOtpAsync(
-                dto.PhoneNumber,
-                dto.OtpCode,
-                OTPPurpose.Registration,
-                dto.UserLanguage
-            );
-
+            var otpValid = await _otpService.VerifyOtpAsync(dto.PhoneNumber, dto.OtpCode, OTPPurpose.Registration, dto.UserLanguage);
             if (!otpValid)
                 throw new AppException("OTP_INVALID", "Invalid or expired OTP");
 
-            // 2. Check if user already exists
-            var exists = await _userRepository.FirstOrDefaultAsync(
-                u => u.PhoneNumber == dto.PhoneNumber
-            );
-
+            var exists = await _userRepository.FirstOrDefaultAsync(u => u.PhoneNumber == dto.PhoneNumber);
             if (exists != null)
                 throw new AppException("USER_EXISTS", "User already exists");
 
-            // 3. Create user
+            var email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim().ToLowerInvariant();
+            if (email != null && await _userRepository.ExistsAsync(u => u.Email == email))
+                throw new AppException("EMAIL_IN_USE", "This email is already registered.");
+
             var user = new User
             {
                 PhoneNumber = dto.PhoneNumber,
                 FullName = dto.FullName,
-                Email = dto.Email,
+                Email = email,
                 Role = UserRole.Customer,
                 IsPhoneVerified = true,
                 CreatedAt = DateTime.UtcNow
             };
-
-            // Create the customer profile together with the user so newly registered
-            // customers can own bookings through the Customer entity's separate Id.
-            user.Customer = new Customer
-            {
-                User = user,
-                FullName = user.FullName
-            };
+            user.Customer = new Customer { User = user, FullName = user.FullName };
 
             await _userRepository.AddAsync(user);
-
-            // 4. Generate token
-            var token = await GenerateTokenAsync(user.Id);
-
-            return new AuthResponseDto
-            {
-                UserId = user.Id,
-                Token = token,
-                Role = user.Role
-            };
-        }
-
-        // =========================================================
-        // SOCIAL LOGIN (Google / Apple)
-        // =========================================================
-        public async Task<AuthResponseDto> LoginWithSocialAsync(SocialLoginDto dto)
-        {
-            var user = await _userRepository
-                .FirstOrDefaultAsync(u =>
-                    u.SocialAuthProviders.Any(p =>
-                        p.Provider == dto.Provider &&
-                        p.ProviderUserId == dto.ProviderUserId));
-
-            // Social login CAN auto-register (this is correct behavior)
-            if (user == null)
-            {
-                user = new User
-                {
-                    Email = dto.Email,
-                    FullName = dto.FullName ?? "",
-                    Role = UserRole.Customer,
-                    IsEmailVerified = true,
-                    CreatedAt = DateTime.UtcNow,
-                    SocialAuthProviders = new List<SocialAuthProvider>
-                    {
-                        new SocialAuthProvider
-                        {
-                            Provider = dto.Provider,
-                            ProviderUserId = dto.ProviderUserId
-                        }
-                    }
-                };
-
-                await _userRepository.AddAsync(user);
-            }
-
-            var token = await GenerateTokenAsync(user.Id);
-
-            return new AuthResponseDto
-            {
-                UserId = user.Id,
-                Token = token,
-                Role = user.Role
-            };
+            return await BuildResponseAsync(user);
         }
 
         // =========================================================
@@ -180,8 +257,31 @@ namespace Zayna.Infrastructure.Services
             if (user == null)
                 throw new AppException("USER_NOT_FOUND", "User not found");
 
-            var jwtSettings = _configuration.GetSection("JwtSettings");
+            return CreateJwt(user);
+        }
 
+        public Task<bool> ValidateTokenAsync(string token)
+        {
+            var handler = new JwtSecurityTokenHandler();
+            return Task.FromResult(handler.CanReadToken(token));
+        }
+
+        private Task<AuthResponseDto> BuildResponseAsync(User user)
+        {
+            return Task.FromResult(new AuthResponseDto
+            {
+                UserId = user.Id,
+                Token = CreateJwt(user),
+                Role = user.Role,
+                FullName = user.FullName,
+                Email = user.Email ?? string.Empty,
+                PhoneNumber = user.PhoneNumber ?? string.Empty
+            });
+        }
+
+        private string CreateJwt(User user)
+        {
+            var jwtSettings = _configuration.GetSection("JwtSettings");
             var claims = new[]
             {
                 new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
@@ -189,9 +289,7 @@ namespace Zayna.Infrastructure.Services
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
             };
 
-            var key = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!));
-
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["SecretKey"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
             var token = new JwtSecurityToken(
@@ -199,16 +297,9 @@ namespace Zayna.Infrastructure.Services
                 audience: jwtSettings["Audience"],
                 claims: claims,
                 expires: DateTime.UtcNow.AddHours(int.Parse(jwtSettings["ExpiryHours"]!)),
-                signingCredentials: creds
-            );
+                signingCredentials: creds);
 
             return new JwtSecurityTokenHandler().WriteToken(token);
-        }
-
-        public Task<bool> ValidateTokenAsync(string token)
-        {
-            var handler = new JwtSecurityTokenHandler();
-            return Task.FromResult(handler.CanReadToken(token));
         }
     }
 }
