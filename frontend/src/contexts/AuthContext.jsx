@@ -36,21 +36,15 @@ export const AuthProvider = ({ children }) => {
     setUser(response);
   };
 
-  const login = async (phoneNumber, otpCode) => {
-    const response = await authService.login(phoneNumber, otpCode);
+  const googleLogin = async (idToken) => {
+    const response = await authService.googleLogin(idToken);
     persistAuth(response);
     return response;
   };
 
-  const register = async (data) => {
-    const response = await authService.register(data);
-    persistAuth(response);
-    return response;
-  };
-
-  const socialLogin = async (provider, accessToken, email, fullName, externalId) => {
-    const response = await authService.socialLogin(provider, accessToken, email, fullName, externalId);
-    persistAuth(response);
+  const registerSalon = async (data) => {
+    const response = await authService.registerSalon(data);
+    persistAuth(response); // fresh token that carries the Salon role
     return response;
   };
 
@@ -62,7 +56,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, socialLogin, logout, loading }}>
+    <AuthContext.Provider value={{ user, googleLogin, registerSalon, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -32,6 +32,9 @@ services:
       JwtSettings__Issuer: ${JWT_ISSUER:-ZAYNA.API}
       JwtSettings__Audience: ${JWT_AUDIENCE:-ZAYNA.Client}
       JwtSettings__ExpiryHours: ${JWT_EXPIRY_HOURS:-24}
+      GoogleSettings__ClientId: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
+      Admin__Email: ${ADMIN_EMAIL:-}
+      Cors__AllowedOrigins: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
     ports:
       - "${API_PORT:-5000}:8080"
     depends_on:
@@ -46,6 +49,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:

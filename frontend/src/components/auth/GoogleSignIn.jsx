@@ -1,0 +1,53 @@
+// ============================================
+// src/components/auth/GoogleSignIn.jsx
+// Shared Google button: signs in, then reports the server response to the parent.
+// ============================================
+import React, { useState } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
+import { toast } from 'react-toastify';
+import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../contexts/AuthContext';
+
+export const GOOGLE_CONFIGURED = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
+
+const GoogleSignIn = ({ onSuccess }) => {
+  const { t } = useTranslation();
+  const { googleLogin } = useAuth();
+  const [busy, setBusy] = useState(false);
+
+  if (!GOOGLE_CONFIGURED) {
+    return (
+      <p className="text-sm text-red-600 text-center">
+        {t('auth.googleNotConfigured', 'Google sign-in is not configured (missing VITE_GOOGLE_CLIENT_ID).')}
+      </p>
+    );
+  }
+
+  const handleSuccess = async (credentialResponse) => {
+    if (!credentialResponse?.credential) {
+      toast.error(t('auth.googleFailed', 'Google sign-in failed. Please try again.'));
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await googleLogin(credentialResponse.credential);
+      toast.success(t('auth.loginSuccess'));
+      onSuccess?.(response);
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('auth.googleFailed', 'Google sign-in failed. Please try again.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={`flex justify-center ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
+      <GoogleLogin
+        onSuccess={handleSuccess}
+        onError={() => toast.error(t('auth.googleFailed', 'Google sign-in failed. Please try again.'))}
+      />
+    </div>
+  );
+};
+
+export default GoogleSignIn;

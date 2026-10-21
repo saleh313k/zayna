@@ -24,6 +24,7 @@ import StylistManagement from './components/salon/StylistManagement';
 import AdminDashboard from './components/admin/Dashboard';
 import Reports from './components/admin/Reports';
 import Users from './components/admin/Users';
+import SalonApprovals from './components/admin/SalonApprovals';
 import ComingSoon from './components/common/ComingSoon';
 import Footer from './components/common/Footer.tsx';
 import Home from './components/common/Home.jsx';
@@ -38,7 +39,7 @@ import Profile from './components/customer/Profile.jsx';
 
 function App() {
   return (
-    <GoogleOAuthProvider clientId="443863336831-s2n4mfnks0riv6nluklud58th40eigjr.apps.googleusercontent.com">
+    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID || ''}>
       <HelmetProvider>
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <LanguageProvider>
@@ -140,6 +141,16 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
                     <Users />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/admin/salons"
+                element={
+                  <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
+                    <Sidebar/>
+                    <SalonApprovals />
                   </ProtectedRoute>
                 }
               />

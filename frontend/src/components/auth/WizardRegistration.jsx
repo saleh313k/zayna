@@ -1,274 +1,116 @@
 // ============================================
 // src/components/auth/WizardRegistration.jsx
+// Salon-owner onboarding: Google sign-in -> salon details -> pending admin approval.
+// (Customers do not register; they just sign in with Google.)
 // ============================================
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../contexts/AuthContext';
-import { authService } from '../../services/authService';
 import { toast } from 'react-toastify';
-import { FiPhone, FiUser, FiMail, FiKey } from 'react-icons/fi';
-import Logo from "@/assets/img/logo.png";
+import Logo from '@/assets/img/logo.png';
+import { useAuth } from '../../contexts/AuthContext';
+import { ROLES } from '../../constants/roles';
+import GoogleSignIn from './GoogleSignIn';
 
+const emptyForm = { salonName: '', salonNameAr: '', contactPhone: '', city: '', addressLine: '' };
 
 const WizardRegistration = () => {
   const { t } = useTranslation();
-  const { register } = useAuth();
   const navigate = useNavigate();
+  const { user, loading, registerSalon } = useAuth();
+  const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    role: '',
-    phoneNumber: '',
-    otpCode: '',
-    email: '',
-    fullName: '',
-    fullNameAr: ''
-  });
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleSendOtp = async () => {
-    if (!formData.phoneNumber) {
-      toast.error('Please enter phone number');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await authService.sendOtp(formData.phoneNumber, 'Registration');
-      toast.success(t('auth.otpSent'));
-      setStep(3);
-    } catch (error) {
-      toast.error(error.response?.data?.message || t('common.error'));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-
+    setSubmitting(true);
     try {
-      await register(formData);
-      toast.success(t('auth.registerSuccess'));
-      navigate('/dashboard');
+      await registerSalon(form);
+      setSubmitted(true);
     } catch (error) {
       toast.error(error.response?.data?.message || t('common.error'));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
+  const field = (name, label, props = {}) => (
+    <div>
+      <label className="block text-sm font-medium mb-1" htmlFor={name}>{label}</label>
+      <input
+        id={name}
+        name={name}
+        value={form[name]}
+        onChange={handleChange}
+        className="input w-full border rounded px-3 py-2"
+        {...props}
+      />
+    </div>
+  );
+
+  let body;
+  if (loading) {
+    body = null;
+  } else if (submitted) {
+    body = (
+      <div className="text-center space-y-4">
+        <h3 className="text-xl font-semibold">{t('salonRegistration.submittedTitle', 'Thank you! Your salon was submitted.')}</h3>
+        <p className="text-gray-600">
+          {t('salonRegistration.submittedBody', 'Our team will review your salon. It will appear publicly and accept bookings once approved.')}
+        </p>
+        <button className="btn-primary" onClick={() => navigate('/salon/dashboard')}>
+          {t('salonRegistration.goDashboard', 'Go to my dashboard')}
+        </button>
+      </div>
+    );
+  } else if (!user) {
+    body = (
+      <div className="space-y-4">
+        <p className="text-gray-600 text-center">
+          {t('salonRegistration.signInFirst', 'First, sign in with Google. Then you will enter your salon details.')}
+        </p>
+        <GoogleSignIn />
+      </div>
+    );
+  } else if (user.role === ROLES.SALON) {
+    body = (
+      <div className="text-center space-y-4">
+        <p>{t('salonRegistration.already', 'You already have a salon account.')}</p>
+        <Link to="/salon/dashboard" className="btn-primary inline-block">
+          {t('salonRegistration.goDashboard', 'Go to my dashboard')}
+        </Link>
+      </div>
+    );
+  } else if (user.role !== ROLES.CUSTOMER) {
+    body = <p className="text-center">{t('salonRegistration.notAllowed', 'This account type cannot register a salon.')}</p>;
+  } else {
+    body = (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {field('salonName', t('salonRegistration.salonName', 'Salon name'), { required: true, minLength: 2, maxLength: 100 })}
+        {field('salonNameAr', t('salonRegistration.salonNameAr', 'Salon name (Arabic, optional)'), { maxLength: 100, dir: 'rtl' })}
+        {field('contactPhone', t('salonRegistration.contactPhone', 'Contact phone'), { required: true, minLength: 6, maxLength: 20, type: 'tel' })}
+        {field('city', t('salonRegistration.city', 'City'), { required: true, minLength: 2, maxLength: 100 })}
+        {field('addressLine', t('salonRegistration.address', 'Address'), { required: true, minLength: 2, maxLength: 200 })}
+        <button type="submit" disabled={submitting} className="btn-primary w-full">
+          {submitting ? t('common.loading', 'Loading...') : t('salonRegistration.submit', 'Submit salon for approval')}
+        </button>
+      </form>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10 py-12">
-      <div className="card max-w-2xl w-full">
-        <div className="text-center mb-8 flex items-center justify-center">
-          <Link to="/" className="flex items-center" onClick={() => setOpen(false)}>
-            <img
-              src={Logo}
-              alt="ZAYNA - Your Time to Shine"
-              className="h-20 w-auto object-contain"
-            />
-          </Link>
+      <div className="card max-w-lg w-full">
+        <div className="text-center mb-6 flex items-center justify-center">
+          <Link to="/"><img src={Logo} alt="ZAYNA" className="h-20 w-auto object-contain" /></Link>
         </div>
-
-        {/* Progress Steps */}
-        <div className="flex justify-between mb-8">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex-1">
-              <div className={`h-2 rounded ${step >= s ? 'bg-primary' : 'bg-gray-200'}`}></div>
-              <p className={`text-sm mt-2 text-center ${step >= s ? 'text-primary font-medium' : 'text-gray-400'}`}>
-                {t(`wizard.step${s}`)}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Step 1: Select User Type */}
-          {step === 1 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold text-center mb-6">
-                {t('wizard.step1')}
-              </h2>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, role: 'Customer' })}
-                  className={`p-6 rounded-lg border-2 transition-all ${
-                    formData.role === 'Customer'
-                      ? 'border-primary bg-primary/10'
-                      : 'border-gray-200 hover:border-primary/50'
-                  }`}
-                >
-                  <div className="text-4xl mb-2">👤</div>
-                  <div className="font-semibold">{t('auth.customer')}</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setFormData({ ...formData, role: 'Salon' })}
-                  className={`p-6 rounded-lg border-2 transition-all ${
-                    formData.role === 'Salon'
-                      ? 'border-primary bg-primary/10'
-                      : 'border-gray-200 hover:border-primary/50'
-                  }`}
-                >
-                  <div className="text-4xl mb-2">💈</div>
-                  <div className="font-semibold">{t('auth.salon')}</div>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setStep(2)}
-                disabled={!formData.role}
-                className="btn-primary w-full"
-              >
-                {t('wizard.next')}
-              </button>
-            </div>
-          )}
-
-          {/* Step 2: Contact Information */}
-          {step === 2 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold text-center mb-6">
-                {t('wizard.step2')}
-              </h2>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  {t('auth.phoneNumber')} *
-                </label>
-                <div className="relative">
-                  <FiPhone className="absolute left-3 top-3 text-gray-400" />
-                  <input
-                    type="tel"
-                    name="phoneNumber"
-                    value={formData.phoneNumber}
-                    onChange={handleChange}
-                    placeholder="+968 91234567"
-                    className="input-field pl-10"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  {t('auth.fullName')} *
-                </label>
-                <div className="relative">
-                  <FiUser className="absolute left-3 top-3 text-gray-400" />
-                  <input
-                    type="text"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleChange}
-                    placeholder="John Doe"
-                    className="input-field pl-10"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  {t('auth.email')}
-                </label>
-                <div className="relative">
-                  <FiMail className="absolute left-3 top-3 text-gray-400" />
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="john@example.com"
-                    className="input-field pl-10"
-                  />
-                </div>
-              </div>
-
-              <div className="flex space-x-4">
-                <button
-                  type="button"
-                  onClick={() => setStep(1)}
-                  className="btn-outline flex-1"
-                >
-                  {t('wizard.previous')}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSendOtp}
-                  disabled={loading}
-                  className="btn-primary flex-1"
-                >
-                  {loading ? t('common.loading') : t('wizard.next')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Verify OTP */}
-          {step === 3 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-semibold text-center mb-6">
-                {t('auth.verifyOtp')}
-              </h2>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  {t('auth.enterOtp')}
-                </label>
-                <div className="relative">
-                  <FiKey className="absolute left-3 top-3 text-gray-400" />
-                  <input
-                    type="text"
-                    name="otpCode"
-                    value={formData.otpCode}
-                    onChange={handleChange}
-                    placeholder="123456"
-                    maxLength="6"
-                    className="input-field pl-10 text-center text-2xl tracking-widest"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex space-x-4">
-                <button
-                  type="button"
-                  onClick={() => setStep(2)}
-                  className="btn-outline flex-1"
-                >
-                  {t('wizard.previous')}
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary flex-1"
-                >
-                  {loading ? t('common.loading') : t('wizard.finish')}
-                </button>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleSendOtp}
-                className="text-sm text-primary hover:underline w-full text-center"
-              >
-                Resend OTP
-              </button>
-            </div>
-          )}
-        </form>
+        <h2 className="text-2xl font-semibold text-center mb-6">
+          {t('salonRegistration.title', 'Register your salon')}
+        </h2>
+        {body}
       </div>
     </div>
   );

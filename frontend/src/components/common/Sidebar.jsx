@@ -1,6 +1,6 @@
 // src/components/common/Sidebar.jsx
 import { Link, useNavigate } from 'react-router-dom';
-import { FiHome, FiCalendar, FiUsers, FiSettings, FiLogOut, FiMenu, FiX } from 'react-icons/fi';
+import { FiHome, FiCalendar, FiUsers, FiSettings, FiLogOut, FiMenu, FiX, FiCheckCircle } from 'react-icons/fi';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -43,6 +43,7 @@ const Sidebar = () => {
     ADMIN: [
       { icon: FiHome, label: t('admin.dashboard'), path: '/dashboard' },
       { icon: FiUsers, label: t('admin.users'), path: '/admin/users' },
+      { icon: FiCheckCircle, label: t('admin.salonApprovals', 'Salon approvals'), path: '/admin/salons' },
       { icon: FiCalendar, label: t('admin.bookings'), path: '/admin/bookings' },
       { icon: FiSettings, label: t('admin.settings'), path: '/admin/settings' },
     ],
