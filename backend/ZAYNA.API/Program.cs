@@ -198,7 +198,13 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.UseHttpsRedirection();
+// In Development the SPA calls http://localhost:5000 directly; a 307 redirect to HTTPS would be
+// blocked by the browser (redirect responses carry no CORS headers). In production TLS is terminated
+// by the reverse proxy / host, so redirecting inside the container is not needed either.
+if (app.Environment.IsDevelopment() == false && app.Configuration.GetValue<bool>("EnforceHttpsRedirection"))
+{
+    app.UseHttpsRedirection();
+}
 app.UseCors("AllowReactApp");
 app.UseAuthentication();
 app.UseAuthorization();
