@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -17,19 +18,30 @@ namespace Zayna.Infrastructure.Services
         private readonly IConfiguration _configuration;
         private readonly IGoogleTokenVerifier _googleVerifier;
         private readonly ApplicationDbContext _context;
+        private readonly IMemoryCache _cache;
+
+        private const int BcryptWorkFactor = 12;
+        private const int MaxFailedLogins = 5;
+        private static readonly TimeSpan LockoutWindow = TimeSpan.FromMinutes(15);
+
+        // Verified against when the email is unknown, so response time does not reveal which emails exist.
+        private static readonly string DummyHash =
+            BCrypt.Net.BCrypt.EnhancedHashPassword("not-a-real-password-timing-equaliser", BcryptWorkFactor);
 
         public AuthService(
             IRepository<User> userRepository,
             IOtpService otpService,
             IConfiguration configuration,
             IGoogleTokenVerifier googleVerifier,
-            ApplicationDbContext context)
+            ApplicationDbContext context,
+            IMemoryCache cache)
         {
             _userRepository = userRepository;
             _otpService = otpService;
             _configuration = configuration;
             _googleVerifier = googleVerifier;
             _context = context;
+            _cache = cache;
         }
 
         // =========================================================
@@ -64,7 +76,17 @@ namespace Zayna.Infrastructure.Services
                 if (user != null)
                 {
                     if (!user.IsEmailVerified)
-                        throw new AppException("EMAIL_IN_USE", "This email is already registered. Please contact support.");
+                    {
+                        // Nobody ever proved ownership of this address (email/password sign-up sends no
+                        // verification email). Google just did, so claim the account and discard any old
+                        // password: whoever pre-registered this address loses access. Accounts whose phone
+                        // was verified are left alone and need support.
+                        if (user.IsPhoneVerified)
+                            throw new AppException("EMAIL_IN_USE", "This email is already registered. Please contact support.");
+
+                        user.IsEmailVerified = true;
+                        user.PasswordHash = null;
+                    }
 
                     user.SocialAuthProviders.Add(new SocialAuthProvider
                     {
@@ -111,6 +133,111 @@ namespace Zayna.Infrastructure.Services
             await _context.SaveChangesAsync();
 
             return await BuildResponseAsync(user);
+        }
+
+        // =========================================================
+        // EMAIL + PASSWORD
+        // =========================================================
+        public async Task<AuthResponseDto> RegisterWithEmailAsync(EmailRegisterDto dto)
+        {
+            var email = NormalizeEmail(dto.Email);
+            var fullName = dto.FullName?.Trim() ?? "";
+            if (fullName.Length is < 2 or > 100)
+                throw new AppException("VALIDATION_FAILED", "Please enter your full name (2-100 characters).");
+
+            ValidatePassword(dto.Password, email);
+
+            if (await _context.Users.AnyAsync(u => u.Email == email))
+                throw new AppException("EMAIL_IN_USE",
+                    "An account with this email already exists. Sign in instead, or use Google sign-in.");
+
+            var user = new User
+            {
+                Email = email,
+                FullName = fullName,
+                Role = UserRole.Customer,
+                PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword(dto.Password, BcryptWorkFactor),
+                // No verification email is sent (no email provider is configured), so the address is
+                // NOT marked verified. Google sign-in with the same address can later claim the account.
+                IsEmailVerified = false,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            user.Customer = new Customer { User = user, FullName = fullName };
+            _context.Users.Add(user);
+
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException)
+            {
+                // Lost a race with a simultaneous registration of the same email (unique index).
+                throw new AppException("EMAIL_IN_USE",
+                    "An account with this email already exists. Sign in instead, or use Google sign-in.");
+            }
+
+            return await BuildResponseAsync(user);
+        }
+
+        public async Task<AuthResponseDto> LoginWithEmailAsync(EmailLoginDto dto)
+        {
+            var email = (dto.Email ?? "").Trim().ToLowerInvariant();
+            var password = dto.Password ?? "";
+
+            if (email.Length == 0 || email.Length > 256 || password.Length == 0 || password.Length > 128)
+                throw InvalidCredentials();
+
+            var failKey = $"login-fail:{email}";
+            if (_cache.TryGetValue(failKey, out int failures) && failures >= MaxFailedLogins)
+                throw new AppException("TOO_MANY_ATTEMPTS",
+                    "Too many failed sign-in attempts. Please wait 15 minutes and try again, or use Google sign-in.");
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+            // Admins must use Google sign-in; accounts without a password (Google/phone only) cannot use this path.
+            var hash = user is { Role: not UserRole.Admin } ? user.PasswordHash : null;
+
+            // Always run one bcrypt verification so timing does not reveal whether the account exists.
+            var valid = BCrypt.Net.BCrypt.EnhancedVerify(password, hash ?? DummyHash) && hash != null;
+            if (!valid || user == null)
+            {
+                _cache.Set(failKey, failures + 1, LockoutWindow);
+                throw InvalidCredentials();
+            }
+
+            if (!user.IsActive)
+                throw new AppException("USER_DISABLED", "This account has been disabled.");
+
+            _cache.Remove(failKey);
+            return await BuildResponseAsync(user);
+        }
+
+        private static AppException InvalidCredentials() =>
+            new("INVALID_CREDENTIALS", "Invalid email or password.");
+
+        private static string NormalizeEmail(string? raw)
+        {
+            var email = (raw ?? "").Trim().ToLowerInvariant();
+            var invalid = new AppException("VALIDATION_FAILED", "Please enter a valid email address.");
+            if (email.Length == 0 || email.Length > 256) throw invalid;
+            try
+            {
+                if (new System.Net.Mail.MailAddress(email).Address != email) throw invalid;
+            }
+            catch (FormatException)
+            {
+                throw invalid;
+            }
+            return email;
+        }
+
+        private static void ValidatePassword(string? password, string email)
+        {
+            if (string.IsNullOrEmpty(password) || password.Length < 8 || password.Length > 128)
+                throw new AppException("WEAK_PASSWORD", "Password must be between 8 and 128 characters.");
+            if (string.Equals(password, email, StringComparison.OrdinalIgnoreCase))
+                throw new AppException("WEAK_PASSWORD", "Password must not be the same as your email.");
         }
 
         // =========================================================

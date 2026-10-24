@@ -50,6 +50,7 @@ namespace ZAYNA.Infrastructure.Data
                 // Operator-controlled configuration is the source of truth for who the admin is.
                 user.Role = UserRole.Admin;
                 user.IsEmailVerified = true;
+                user.PasswordHash = null; // admins sign in with Google only; drop any password set before promotion
                 user.UpdatedAt = DateTime.UtcNow;
                 await context.SaveChangesAsync();
             }

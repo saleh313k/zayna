@@ -1,3 +1,4 @@
+using System.Threading.RateLimiting;
 // ZAYNA.API/Program.cs
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -162,6 +163,24 @@ builder.Services.AddCors(options =>
     });
 });
 
+builder.Services.AddMemoryCache();
+
+// Brute-force protection for credential endpoints (per client IP). Behind a reverse proxy the proxy's
+// forwarded client IP must be trusted (forwarded headers) for this to see real client addresses.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
+
 // Register Services
 builder.Services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -206,6 +225,7 @@ if (app.Environment.IsDevelopment() == false && app.Configuration.GetValue<bool>
     app.UseHttpsRedirection();
 }
 app.UseCors("AllowReactApp");
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

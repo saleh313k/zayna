@@ -11,6 +11,7 @@ import Logo from '@/assets/img/logo.png';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROLES } from '../../constants/roles';
 import GoogleSignIn from './GoogleSignIn';
+import EmailAuthForm from './EmailAuthForm';
 
 const emptyForm = { salonName: '', salonNameAr: '', contactPhone: '', city: '', addressLine: '' };
 
@@ -73,6 +74,12 @@ const WizardRegistration = () => {
           {t('salonRegistration.signInFirst', 'First, sign in with Google. Then you will enter your salon details.')}
         </p>
         <GoogleSignIn />
+        <div className="flex items-center my-2">
+          <div className="flex-1 border-t" />
+          <span className="px-3 text-sm text-gray-500">{t('auth.or', 'or')}</span>
+          <div className="flex-1 border-t" />
+        </div>
+        <EmailAuthForm defaultMode="register" />
       </div>
     );
   } else if (user.role === ROLES.SALON) {

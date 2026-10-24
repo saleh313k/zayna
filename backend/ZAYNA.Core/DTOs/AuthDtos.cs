@@ -24,6 +24,19 @@ namespace Zayna.Core.DTOs
         public UserLanguage UserLanguage { get; set; }
     }
 
+    public class EmailRegisterDto
+    {
+        public string FullName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+
+    public class EmailLoginDto
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+
     public class GoogleLoginDto
     {
         /// <summary>The Google ID token (JWT credential) returned by Google Sign-In.</summary>

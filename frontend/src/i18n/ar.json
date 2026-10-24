@@ -50,7 +50,15 @@
     "googleFailed": "فشل تسجيل الدخول عبر جوجل. حاول مرة أخرى.",
     "googleNotConfigured": "تسجيل الدخول عبر جوجل غير مُعدّ.",
     "salonOwnerPrompt": "هل تملك صالونًا؟",
-    "registerSalonLink": "سجّل صالونك"
+    "registerSalonLink": "سجّل صالونك",
+    "signInTab": "تسجيل الدخول",
+    "createAccountTab": "إنشاء حساب",
+    "password": "كلمة المرور",
+    "passwordHint": "8 أحرف على الأقل.",
+    "signIn": "تسجيل الدخول",
+    "createAccount": "إنشاء حساب",
+    "forgotHint": "نسيت كلمة المرور؟ سجّل الدخول عبر جوجل بنفس البريد الإلكتروني لاستعادة حسابك.",
+    "tooManyRequests": "محاولات كثيرة. انتظر دقيقة ثم حاول مرة أخرى."
   },
   "wizard": {
     "step1": "اختر نوع المستخدم",

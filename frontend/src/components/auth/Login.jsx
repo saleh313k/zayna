@@ -6,6 +6,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Logo from '@/assets/img/logo.png';
 import GoogleSignIn from './GoogleSignIn';
+import EmailAuthForm from './EmailAuthForm';
 import { ROLES } from '../../constants/roles';
 
 export const homeForRole = (role) => {
@@ -38,6 +39,14 @@ const Login = () => {
         </p>
 
         <GoogleSignIn onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
+
+        <div className="flex items-center my-5">
+          <div className="flex-1 border-t" />
+          <span className="px-3 text-sm text-gray-500">{t('auth.or', 'or')}</span>
+          <div className="flex-1 border-t" />
+        </div>
+
+        <EmailAuthForm onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
 
         <p className="text-center text-sm text-gray-600 mt-6">
           {t('auth.salonOwnerPrompt', 'Own a salon?')}{' '}

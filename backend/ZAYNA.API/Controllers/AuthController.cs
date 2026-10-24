@@ -1,6 +1,7 @@
 // ZAYNA.API/Controllers/AuthController.cs
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 using Zayna.Core.DTOs;
 using Zayna.Core.Interfaces;
@@ -106,6 +107,7 @@ namespace Zayna.API.Controllers
         /// <summary>
         /// Sign in (or sign up as a Customer) with a Google ID token. The token is verified server-side.
         /// </summary>
+        [EnableRateLimiting("auth")]
         [HttpPost("google")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto dto)
         {
@@ -113,6 +115,24 @@ namespace Zayna.API.Controllers
                 return BadRequest(new { success = false, message = "A Google ID token is required." });
 
             var response = await _authService.LoginWithGoogleAsync(dto.IdToken);
+            return Ok(response);
+        }
+
+        /// <summary>Create a Customer account with email and password.</summary>
+        [EnableRateLimiting("auth")]
+        [HttpPost("register-email")]
+        public async Task<IActionResult> RegisterWithEmail([FromBody] EmailRegisterDto dto)
+        {
+            var response = await _authService.RegisterWithEmailAsync(dto);
+            return Ok(response);
+        }
+
+        /// <summary>Sign in with email and password.</summary>
+        [EnableRateLimiting("auth")]
+        [HttpPost("login-email")]
+        public async Task<IActionResult> LoginWithEmail([FromBody] EmailLoginDto dto)
+        {
+            var response = await _authService.LoginWithEmailAsync(dto);
             return Ok(response);
         }
 

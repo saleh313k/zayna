@@ -42,6 +42,18 @@ export const AuthProvider = ({ children }) => {
     return response;
   };
 
+  const emailRegister = async (data) => {
+    const response = await authService.emailRegister(data);
+    persistAuth(response);
+    return response;
+  };
+
+  const emailLogin = async (data) => {
+    const response = await authService.emailLogin(data);
+    persistAuth(response);
+    return response;
+  };
+
   const registerSalon = async (data) => {
     const response = await authService.registerSalon(data);
     persistAuth(response); // fresh token that carries the Salon role
@@ -56,7 +68,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, googleLogin, registerSalon, logout, loading }}>
+    <AuthContext.Provider value={{ user, googleLogin, emailLogin, emailRegister, registerSalon, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );
