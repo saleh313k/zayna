@@ -46,12 +46,12 @@ const Login = () => {
           <div className="flex-1 border-t" />
         </div>
 
-        <EmailAuthForm onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
+        <EmailAuthForm allowRegister={false} onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
 
         <p className="text-center text-sm text-gray-600 mt-6">
-          {t('auth.salonOwnerPrompt', 'Own a salon?')}{' '}
+          {t('auth.newHere', 'New to Zayna?')}{' '}
           <Link to="/register" className="text-primary font-medium">
-            {t('auth.registerSalonLink', 'Register your salon')}
+            {t('auth.createAccountLink', 'Create an account')}
           </Link>
         </p>
       </div>

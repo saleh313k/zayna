@@ -196,7 +196,12 @@ const WizardRegistration = () => {
     } else {
       accountBody = (
         <div className="space-y-4">
-          <GoogleSignIn onSuccess={handleAuthenticated} />
+          <GoogleSignIn
+            register
+            role={isSalon ? ROLES.SALON : ROLES.CUSTOMER}
+            salon={isSalon ? salon : undefined}
+            onSuccess={handleAuthenticated}
+          />
           {divider}
           <EmailAuthForm
             defaultMode="register"

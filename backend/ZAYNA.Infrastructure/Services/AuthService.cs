@@ -47,9 +47,9 @@ namespace Zayna.Infrastructure.Services
         // =========================================================
         // GOOGLE SIGN-IN (primary MVP login method)
         // =========================================================
-        public async Task<AuthResponseDto> LoginWithGoogleAsync(string idToken)
+        public async Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginDto dto)
         {
-            var identity = await _googleVerifier.VerifyAsync(idToken);
+            var identity = await _googleVerifier.VerifyAsync(dto.IdToken);
             if (identity == null)
                 throw new AppException("GOOGLE_TOKEN_INVALID", "Google sign-in could not be verified. Please try again.");
 
@@ -97,7 +97,15 @@ namespace Zayna.Infrastructure.Services
                 }
                 else
                 {
-                    // 3. Brand-new user: always a Customer. Salon owners upgrade via RegisterSalonAsync.
+                    // 3. Brand-new user. Accounts are only created from the registration wizard (Register = true),
+                    //    with the chosen account type; plain sign-in never creates an account.
+                    if (!dto.Register)
+                        throw new AppException("ACCOUNT_NOT_FOUND",
+                            "No Zayna account is linked to this Google account yet. Please register first.");
+
+                    var role = dto.Role ?? UserRole.Customer;
+                    var salon = PrepareRegistration(role, dto.Salon, email);
+
                     var fullName = string.IsNullOrWhiteSpace(identity.Name) ? email : identity.Name.Trim();
                     if (fullName.Length > 100) fullName = fullName[..100];
 
@@ -105,12 +113,15 @@ namespace Zayna.Infrastructure.Services
                     {
                         Email = email,
                         FullName = fullName,
-                        Role = UserRole.Customer,
+                        Role = role,
                         IsEmailVerified = true,
                         IsActive = true,
                         CreatedAt = DateTime.UtcNow
                     };
-                    user.Customer = new Customer { User = user, FullName = fullName };
+                    if (salon != null)
+                        user.Salon = salon; // user + salon + branch are saved atomically
+                    else
+                        user.Customer = new Customer { User = user, FullName = fullName };
                     user.SocialAuthProviders.Add(new SocialAuthProvider
                     {
                         Provider = SocialProvider.Google,
@@ -150,12 +161,7 @@ namespace Zayna.Infrastructure.Services
             // The role is an untrusted request. Only Customer and Salon may self-register: Admin is bootstrapped
             // from configuration and Stylists are added by their salon owner.
             var role = dto.Role ?? UserRole.Customer;
-            if (role != UserRole.Customer && role != UserRole.Salon)
-                throw new AppException("ROLE_NOT_ALLOWED", "This account type cannot be created through registration.");
-
-            Salon? salon = null;
-            if (role == UserRole.Salon)
-                salon = BuildSalon(dto.Salon, email); // validates salon details before any database work
+            var salon = PrepareRegistration(role, dto.Salon, email); // validates before any database work
 
             if (await _context.Users.AnyAsync(u => u.Email == email))
                 throw new AppException("EMAIL_IN_USE",
@@ -278,6 +284,18 @@ namespace Zayna.Infrastructure.Services
             await _context.SaveChangesAsync();
 
             return await BuildResponseAsync(user);
+        }
+
+        /// <summary>
+        /// Checks that an account type may be created through public registration (Customer or Salon only) and,
+        /// for Salon, validates the details and builds the unverified salon. Returns null for Customer.
+        /// </summary>
+        private static Salon? PrepareRegistration(UserRole role, RegisterSalonDto? salonDto, string? email)
+        {
+            if (role != UserRole.Customer && role != UserRole.Salon)
+                throw new AppException("ROLE_NOT_ALLOWED", "This account type cannot be created through registration.");
+
+            return role == UserRole.Salon ? BuildSalon(salonDto, email) : null;
         }
 
         /// <summary>

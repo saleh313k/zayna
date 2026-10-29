@@ -114,7 +114,7 @@ namespace Zayna.API.Controllers
             if (string.IsNullOrWhiteSpace(dto.IdToken))
                 return BadRequest(new { success = false, message = "A Google ID token is required." });
 
-            var response = await _authService.LoginWithGoogleAsync(dto.IdToken);
+            var response = await _authService.LoginWithGoogleAsync(dto);
             return Ok(response);
         }
 

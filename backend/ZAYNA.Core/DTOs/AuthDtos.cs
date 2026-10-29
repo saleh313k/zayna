@@ -50,6 +50,18 @@ namespace Zayna.Core.DTOs
     {
         /// <summary>The Google ID token (JWT credential) returned by Google Sign-In.</summary>
         public string IdToken { get; set; } = string.Empty;
+
+        /// <summary>
+        /// True only from the registration wizard. When false (normal sign-in) a Google account that has no
+        /// Zayna account yet is rejected (ACCOUNT_NOT_FOUND) instead of being created silently.
+        /// </summary>
+        public bool Register { get; set; }
+
+        /// <summary>Account type for a NEW account (Customer when omitted; only Customer and Salon allowed).</summary>
+        public UserRole? Role { get; set; }
+
+        /// <summary>Required when creating a new Salon account.</summary>
+        public RegisterSalonDto? Salon { get; set; }
     }
 
     public class RegisterSalonDto

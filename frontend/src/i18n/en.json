@@ -58,7 +58,10 @@
     "signIn": "Sign in",
     "createAccount": "Create account",
     "forgotHint": "Forgot your password? Sign in with Google using the same email to recover your account.",
-    "tooManyRequests": "Too many attempts. Please wait a minute and try again."
+    "tooManyRequests": "Too many attempts. Please wait a minute and try again.",
+    "newHere": "New to Zayna?",
+    "createAccountLink": "Create an account",
+    "noAccountRegister": "No account found for this Google account. Please register first."
   },
   "wizard": {
     "step1": "Select User Type",

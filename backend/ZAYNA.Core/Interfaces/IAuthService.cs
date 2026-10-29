@@ -14,7 +14,7 @@ namespace Zayna.Core.Interfaces
         Task<AuthResponseDto> RegisterAsync(RegisterDto dto);
         Task<AuthResponseDto> RegisterWithEmailAsync(EmailRegisterDto dto);
         Task<AuthResponseDto> LoginWithEmailAsync(EmailLoginDto dto);
-        Task<AuthResponseDto> LoginWithGoogleAsync(string idToken);
+        Task<AuthResponseDto> LoginWithGoogleAsync(GoogleLoginDto dto);
         Task<AuthResponseDto> RegisterSalonAsync(Guid userId, RegisterSalonDto dto);
         Task<string> GenerateTokenAsync(Guid userId);
         Task<bool> ValidateTokenAsync(string token);

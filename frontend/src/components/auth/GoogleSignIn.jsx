@@ -10,7 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export const GOOGLE_CONFIGURED = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
-const GoogleSignIn = ({ onSuccess }) => {
+const GoogleSignIn = ({ onSuccess, register = false, role, salon }) => {
   const { t } = useTranslation();
   const { googleLogin } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -30,11 +30,15 @@ const GoogleSignIn = ({ onSuccess }) => {
     }
     setBusy(true);
     try {
-      const response = await googleLogin(credentialResponse.credential);
+      const response = await googleLogin(credentialResponse.credential, { register, role, salon });
       toast.success(t('auth.loginSuccess'));
       onSuccess?.(response);
     } catch (error) {
-      toast.error(error.response?.data?.message || t('auth.googleFailed', 'Google sign-in failed. Please try again.'));
+      if (error.response?.data?.code === 'ACCOUNT_NOT_FOUND') {
+        toast.error(t('auth.noAccountRegister', 'No account found for this Google account. Please register first.'));
+      } else {
+        toast.error(error.response?.data?.message || t('auth.googleFailed', 'Google sign-in failed. Please try again.'));
+      }
     } finally {
       setBusy(false);
     }

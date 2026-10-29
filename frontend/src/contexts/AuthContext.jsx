@@ -36,8 +36,8 @@ export const AuthProvider = ({ children }) => {
     setUser(response);
   };
 
-  const googleLogin = async (idToken) => {
-    const response = await authService.googleLogin(idToken);
+  const googleLogin = async (idToken, options) => {
+    const response = await authService.googleLogin(idToken, options);
     persistAuth(response);
     return response;
   };

@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 
-const EmailAuthForm = ({ defaultMode = 'login', role, salon, onSuccess }) => {
+const EmailAuthForm = ({ defaultMode = 'login', allowRegister = true, role, salon, onSuccess }) => {
   const { t } = useTranslation();
   const { emailLogin, emailRegister } = useAuth();
   const [mode, setMode] = useState(defaultMode);
@@ -16,7 +16,7 @@ const EmailAuthForm = ({ defaultMode = 'login', role, salon, onSuccess }) => {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const isRegister = mode === 'register';
+  const isRegister = allowRegister && mode === 'register';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,6 +42,7 @@ const EmailAuthForm = ({ defaultMode = 'login', role, salon, onSuccess }) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+      {allowRegister && (
       <div className="flex rounded overflow-hidden border text-sm">
         <button
           type="button"
@@ -58,6 +59,7 @@ const EmailAuthForm = ({ defaultMode = 'login', role, salon, onSuccess }) => {
           {t('auth.createAccountTab', 'Create account')}
         </button>
       </div>
+      )}
 
       {isRegister && (
         <input
