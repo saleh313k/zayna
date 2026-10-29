@@ -67,3 +67,7 @@ Business/Graphic/favicon_io.zip
 Business/Graphic/logo.png
 Business/Graphic/zayna_logo-TYPO.psd
 Business/Graphic/zayna_logo.psd
+backend/ZAYNA.API/Migrations/ApplicationDbContextModelSnapshot.cs
+docs/zayna-fix-https-redirect.patch
+docs/zayna-email-password-auth.patch
+docs/zayna-mvp-google-auth.patch

@@ -225,6 +225,7 @@ if (app.Environment.IsDevelopment() == false && app.Configuration.GetValue<bool>
     app.UseHttpsRedirection();
 }
 app.UseCors("AllowReactApp");
+app.UseCors("LocalFrontend");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
