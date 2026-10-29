@@ -147,6 +147,16 @@ namespace Zayna.Infrastructure.Services
 
             ValidatePassword(dto.Password, email);
 
+            // The role is an untrusted request. Only Customer and Salon may self-register: Admin is bootstrapped
+            // from configuration and Stylists are added by their salon owner.
+            var role = dto.Role ?? UserRole.Customer;
+            if (role != UserRole.Customer && role != UserRole.Salon)
+                throw new AppException("ROLE_NOT_ALLOWED", "This account type cannot be created through registration.");
+
+            Salon? salon = null;
+            if (role == UserRole.Salon)
+                salon = BuildSalon(dto.Salon, email); // validates salon details before any database work
+
             if (await _context.Users.AnyAsync(u => u.Email == email))
                 throw new AppException("EMAIL_IN_USE",
                     "An account with this email already exists. Sign in instead, or use Google sign-in.");
@@ -155,7 +165,7 @@ namespace Zayna.Infrastructure.Services
             {
                 Email = email,
                 FullName = fullName,
-                Role = UserRole.Customer,
+                Role = role,
                 PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword(dto.Password, BcryptWorkFactor),
                 // No verification email is sent (no email provider is configured), so the address is
                 // NOT marked verified. Google sign-in with the same address can later claim the account.
@@ -163,7 +173,10 @@ namespace Zayna.Infrastructure.Services
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
-            user.Customer = new Customer { User = user, FullName = fullName };
+            if (salon != null)
+                user.Salon = salon;                                  // user + salon + branch saved atomically below
+            else
+                user.Customer = new Customer { User = user, FullName = fullName };
             _context.Users.Add(user);
 
             try
@@ -245,20 +258,6 @@ namespace Zayna.Infrastructure.Services
         // =========================================================
         public async Task<AuthResponseDto> RegisterSalonAsync(Guid userId, RegisterSalonDto dto)
         {
-            var salonName = dto.SalonName?.Trim() ?? "";
-            var phone = dto.ContactPhone?.Trim() ?? "";
-            var city = dto.City?.Trim() ?? "";
-            var address = dto.AddressLine?.Trim() ?? "";
-
-            if (salonName.Length is < 2 or > 100 ||
-                phone.Length is < 6 or > 20 ||
-                city.Length is < 2 or > 100 ||
-                address.Length is < 2 or > 200)
-            {
-                throw new AppException("VALIDATION_FAILED",
-                    "Salon name, contact phone, city and address are required and must be a reasonable length.");
-            }
-
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
             if (user == null || !user.IsActive)
                 throw new AppException("USER_NOT_FOUND", "User not found");
@@ -269,15 +268,46 @@ namespace Zayna.Infrastructure.Services
             if (await _context.Salons.AnyAsync(s => s.UserId == userId))
                 throw new AppException("SALON_EXISTS", "A salon is already registered for this account.");
 
+            var salon = BuildSalon(dto, user.Email);
+            salon.UserId = userId;
+
+            user.Role = UserRole.Salon;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            _context.Salons.Add(salon); // salon + branch + working hours + role change: one SaveChanges = one transaction
+            await _context.SaveChangesAsync();
+
+            return await BuildResponseAsync(user);
+        }
+
+        /// <summary>
+        /// Validates the salon details and builds an UNVERIFIED salon (hidden from the public until an admin
+        /// approves it) with a main branch and default working hours (Friday closed; editable later).
+        /// </summary>
+        private static Salon BuildSalon(RegisterSalonDto? dto, string? contactEmail)
+        {
+            var salonName = dto?.SalonName?.Trim() ?? "";
+            var phone = dto?.ContactPhone?.Trim() ?? "";
+            var city = dto?.City?.Trim() ?? "";
+            var address = dto?.AddressLine?.Trim() ?? "";
+
+            if (salonName.Length is < 2 or > 100 ||
+                phone.Length is < 6 or > 20 ||
+                city.Length is < 2 or > 100 ||
+                address.Length is < 2 or > 200)
+            {
+                throw new AppException("VALIDATION_FAILED",
+                    "Salon name, contact phone, city and address are required and must be a reasonable length.");
+            }
+
             var now = DateTime.UtcNow;
             var salon = new Salon
             {
-                UserId = userId,
                 SalonName = salonName,
-                SalonNameAr = string.IsNullOrWhiteSpace(dto.SalonNameAr) ? null : dto.SalonNameAr.Trim(),
+                SalonNameAr = string.IsNullOrWhiteSpace(dto!.SalonNameAr) ? null : dto.SalonNameAr.Trim(),
                 ContactPhone = phone,
-                ContactEmail = user.Email,
-                IsVerified = false, // hidden from public listings until an admin approves
+                ContactEmail = contactEmail,
+                IsVerified = false,
                 CreatedAt = now,
                 UpdatedAt = now
             };
@@ -295,8 +325,6 @@ namespace Zayna.Infrastructure.Services
                 UpdatedAt = now
             };
 
-            // Sensible defaults so the salon can accept bookings once approved; editable via
-            // PUT /api/branch/{branchId}/working-hours. Friday closed, matching the existing seed data.
             for (int day = 0; day <= 6; day++)
             {
                 branch.WorkingHours.Add(new BranchWorkingHours
@@ -308,14 +336,8 @@ namespace Zayna.Infrastructure.Services
                 });
             }
 
-            user.Role = UserRole.Salon;
-            user.UpdatedAt = now;
-
-            _context.Salons.Add(salon);
-            _context.Branches.Add(branch);
-            await _context.SaveChangesAsync(); // single SaveChanges = single transaction
-
-            return await BuildResponseAsync(user);
+            salon.Branches.Add(branch);
+            return salon;
         }
 
         // =========================================================

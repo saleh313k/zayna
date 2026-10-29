@@ -353,5 +353,21 @@
     "goDashboard": "Go to my dashboard",
     "already": "You already have a salon account.",
     "notAllowed": "This account type cannot register a salon."
+  },
+  "registration": {
+    "stepType": "Account type",
+    "stepSalon": "Salon details",
+    "stepAccount": "Create account",
+    "chooseType": "How will you use Zayna?",
+    "customerDesc": "Book salon appointments",
+    "salonDesc": "List and manage my salon",
+    "salonSubmittedTitle": "Thank you! Your salon was submitted.",
+    "salonSubmittedBody": "Our team will review your salon. It will appear publicly and accept bookings once approved.",
+    "customerWelcomeTitle": "Welcome to Zayna!",
+    "customerWelcomeBody": "Your account is ready. You can now book appointments.",
+    "goDashboard": "Go to my dashboard",
+    "alreadySignedIn": "You are already signed in.",
+    "submitAsSignedIn": "You are signed in. Submit your salon for approval.",
+    "haveAccount": "Already have an account?"
   }
 }

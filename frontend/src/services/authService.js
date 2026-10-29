@@ -11,8 +11,13 @@ export const authService = {
   },
 
   // Create a customer account with email + password.
-  emailRegister: async ({ fullName, email, password }) => {
-    const response = await api.post('/auth/register-email', { fullName, email, password });
+  // role (optional): ROLES.CUSTOMER (default) or ROLES.SALON; for SALON also pass salon details.
+  // The server enforces which roles may self-register.
+  emailRegister: async ({ fullName, email, password, role, salon }) => {
+    const payload = { fullName, email, password };
+    if (role !== undefined && role !== null) payload.role = role;
+    if (salon) payload.salon = salon;
+    const response = await api.post('/auth/register-email', payload);
     return response.data;
   },
 

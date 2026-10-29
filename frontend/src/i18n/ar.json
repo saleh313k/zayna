@@ -350,5 +350,21 @@
     "goDashboard": "الانتقال إلى لوحة التحكم",
     "already": "لديك حساب صالون بالفعل.",
     "notAllowed": "لا يمكن لهذا النوع من الحسابات تسجيل صالون."
+  },
+  "registration": {
+    "stepType": "نوع الحساب",
+    "stepSalon": "بيانات الصالون",
+    "stepAccount": "إنشاء الحساب",
+    "chooseType": "كيف ستستخدم زينة؟",
+    "customerDesc": "احجز مواعيد الصالونات",
+    "salonDesc": "أضف صالوني وأدِره",
+    "salonSubmittedTitle": "شكرًا لك! تم إرسال صالونك.",
+    "salonSubmittedBody": "سيراجع فريقنا صالونك، وسيظهر للعامة ويقبل الحجوزات بعد الموافقة عليه.",
+    "customerWelcomeTitle": "أهلًا بك في زينة!",
+    "customerWelcomeBody": "حسابك جاهز. يمكنك الآن حجز المواعيد.",
+    "goDashboard": "الانتقال إلى لوحة التحكم",
+    "alreadySignedIn": "أنت مسجّل الدخول بالفعل.",
+    "submitAsSignedIn": "أنت مسجّل الدخول. أرسل صالونك للمراجعة.",
+    "haveAccount": "لديك حساب بالفعل؟"
   }
 }

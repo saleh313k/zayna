@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 
-const EmailAuthForm = ({ defaultMode = 'login', onSuccess }) => {
+const EmailAuthForm = ({ defaultMode = 'login', role, salon, onSuccess }) => {
   const { t } = useTranslation();
   const { emailLogin, emailRegister } = useAuth();
   const [mode, setMode] = useState(defaultMode);
@@ -23,7 +23,7 @@ const EmailAuthForm = ({ defaultMode = 'login', onSuccess }) => {
     setBusy(true);
     try {
       const response = isRegister
-        ? await emailRegister({ fullName, email, password })
+        ? await emailRegister({ fullName, email, password, role, salon })
         : await emailLogin({ email, password });
       toast.success(t('auth.loginSuccess'));
       onSuccess?.(response);

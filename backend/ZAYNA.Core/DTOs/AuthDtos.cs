@@ -29,6 +29,15 @@ namespace Zayna.Core.DTOs
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Account type chosen at registration. Only Customer (default when omitted) and Salon are allowed.
+        /// Nullable on purpose: an omitted value must not silently become 0 (Admin).
+        /// </summary>
+        public UserRole? Role { get; set; }
+
+        /// <summary>Required when Role is Salon.</summary>
+        public RegisterSalonDto? Salon { get; set; }
     }
 
     public class EmailLoginDto
