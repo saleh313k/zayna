@@ -46,7 +46,7 @@ const Login = () => {
           <div className="flex-1 border-t" />
         </div>
 
-        <EmailAuthForm allowRegister={false} onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
+        <EmailAuthForm forcedMode="login" onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
 
         <p className="text-center text-sm text-gray-600 mt-6">
           {t('auth.newHere', 'New to Zayna?')}{' '}

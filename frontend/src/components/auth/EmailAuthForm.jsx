@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { useAuth } from '../../contexts/AuthContext';
 
-const EmailAuthForm = ({ defaultMode = 'login', allowRegister = true, role, salon, onSuccess }) => {
+// forcedMode: 'login' | 'register' locks the form to one mode and hides the tab switcher.
+const EmailAuthForm = ({ defaultMode = 'login', forcedMode, role, salon, onSuccess }) => {
   const { t } = useTranslation();
   const { emailLogin, emailRegister } = useAuth();
   const [mode, setMode] = useState(defaultMode);
@@ -16,7 +17,7 @@ const EmailAuthForm = ({ defaultMode = 'login', allowRegister = true, role, salo
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const isRegister = allowRegister && mode === 'register';
+  const isRegister = (forcedMode || mode) === 'register';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,7 +43,7 @@ const EmailAuthForm = ({ defaultMode = 'login', allowRegister = true, role, salo
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      {allowRegister && (
+      {!forcedMode && (
       <div className="flex rounded overflow-hidden border text-sm">
         <button
           type="button"

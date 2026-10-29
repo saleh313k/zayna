@@ -10,7 +10,8 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export const GOOGLE_CONFIGURED = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
-const GoogleSignIn = ({ onSuccess, register = false, role, salon }) => {
+// text: Google only allows presets: signin_with | signup_with | continue_with | signin
+const GoogleSignIn = ({ onSuccess, register = false, role, salon, text = 'signin_with' }) => {
   const { t } = useTranslation();
   const { googleLogin } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -47,6 +48,7 @@ const GoogleSignIn = ({ onSuccess, register = false, role, salon }) => {
   return (
     <div className={`flex justify-center ${busy ? 'opacity-50 pointer-events-none' : ''}`}>
       <GoogleLogin
+        text={text}
         onSuccess={handleSuccess}
         onError={() => toast.error(t('auth.googleFailed', 'Google sign-in failed. Please try again.'))}
       />
