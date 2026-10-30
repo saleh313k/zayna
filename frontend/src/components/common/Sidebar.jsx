@@ -41,9 +41,9 @@ const Sidebar = () => {
       { icon: FiSettings, label: t('stylist.profile'), path: '/stylist/profile' },
     ],
     ADMIN: [
-      { icon: FiHome, label: t('admin.dashboard'), path: '/dashboard' },
-      { icon: FiUsers, label: t('admin.users'), path: '/admin/users' },
+      { icon: FiHome, label: t('admin.dashboard'), path: '/admin/dashboard' },
       { icon: FiCheckCircle, label: t('admin.salonApprovals', 'Salon approvals'), path: '/admin/salons' },
+      { icon: FiUsers, label: t('admin.users'), path: '/admin/users' },
       { icon: FiCalendar, label: t('admin.bookings'), path: '/admin/bookings' },
       { icon: FiSettings, label: t('admin.settings'), path: '/admin/settings' },
     ],

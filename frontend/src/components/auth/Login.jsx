@@ -12,7 +12,7 @@ import { ROLES } from '../../constants/roles';
 export const homeForRole = (role) => {
   switch (role) {
     case ROLES.ADMIN:
-      return '/admin/salons';
+      return '/admin/dashboard';
     case ROLES.SALON:
       return '/salon/dashboard';
     default:

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
 using Zayna.Core.Interfaces;
@@ -125,6 +126,30 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(secretKey),
         ClockSkew = TimeSpan.Zero
+    };
+
+    // A disabled (or deleted) user must lose access immediately, not only when the token expires.
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async ctx =>
+        {
+            var idValue = ctx.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                          ?? ctx.Principal?.FindFirst("sub")?.Value;
+            if (!Guid.TryParse(idValue, out var userId))
+            {
+                ctx.Fail("Invalid token subject.");
+                return;
+            }
+
+            var db = ctx.HttpContext.RequestServices.GetRequiredService<ApplicationDbContext>();
+            var isActive = await db.Users.AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => (bool?)u.IsActive)
+                .FirstOrDefaultAsync();
+
+            if (isActive != true)
+                ctx.Fail("User is disabled or no longer exists.");
+        }
     };
 });
 

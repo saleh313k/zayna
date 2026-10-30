@@ -2,7 +2,7 @@
 // src/App.jsx
 // ============================================
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import ProtectedRoute from './routes/ProtectedRoute';
@@ -25,6 +25,7 @@ import AdminDashboard from './components/admin/Dashboard';
 import Reports from './components/admin/Reports';
 import Users from './components/admin/Users';
 import SalonApprovals from './components/admin/SalonApprovals';
+import AdminBookings from './components/admin/Bookings';
 import ComingSoon from './components/common/ComingSoon';
 import Footer from './components/common/Footer.tsx';
 import Home from './components/common/Home.jsx';
@@ -119,41 +120,22 @@ function App() {
                 }
               />
 
-              {/* Admin Routes */}
+              {/* Admin Routes: one layout route guarantees the sidebar on EVERY admin page */}
               <Route
-                path="/admin/dashboard"
                 element={
                   <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                    <AdminDashboard />
+                    <Sidebar />
+                    <Outlet />
                   </ProtectedRoute>
                 }
-              />
-              <Route
-                path="/admin/Reports"
-                element={
-                  <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                    <Reports />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin/Users"
-                element={
-                  <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                    <Users />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/admin/salons"
-                element={
-                  <ProtectedRoute allowedRoles={[ROLES.ADMIN]}>
-                    <Sidebar/>
-                    <SalonApprovals />
-                  </ProtectedRoute>
-                }
-              />
+              >
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/salons" element={<SalonApprovals />} />
+                <Route path="/admin/users" element={<Users />} />
+                <Route path="/admin/bookings" element={<AdminBookings />} />
+                <Route path="/admin/reports" element={<Reports />} />
+                <Route path="/admin/settings" element={<ComingSoon />} />
+              </Route>
 
               {/* Default Route */}
               <Route path="/" element={<Home/>} />
