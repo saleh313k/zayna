@@ -71,3 +71,6 @@ backend/ZAYNA.API/Migrations/ApplicationDbContextModelSnapshot.cs
 docs/zayna-fix-https-redirect.patch
 docs/zayna-email-password-auth.patch
 docs/zayna-mvp-google-auth.patch
+zayna-registration-roles.patch
+zayna-admin-panel.patch
+zayna-booking-journey.patch
