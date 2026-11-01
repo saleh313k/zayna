@@ -49,6 +49,8 @@ namespace Zayna.Core.DTOs
         public DateTime? CancelledAt { get; set; }
         public string? CancellationReason { get; set; }
         public bool CanCancel { get; set; }
+        /// <summary>BookingStatus values the salon can change this booking to right now (empty for customer views).</summary>
+        public int[] AllowedStatuses { get; set; } = Array.Empty<int>();
         public BookingSalonInfo Salon { get; set; } = new();
         public BookingBranchInfo Branch { get; set; } = new();
         public BookingStylistInfo Stylist { get; set; } = new();

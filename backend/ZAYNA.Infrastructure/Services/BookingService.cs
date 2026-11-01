@@ -18,6 +18,21 @@ namespace ZAYNA.Infrastructure.Services
             [BookingStatus.InProgress] = new[] { BookingStatus.Completed },
         };
 
+        /// <summary>
+        /// The statuses a booking can move to right now: valid transitions only, and InProgress / Completed / NoShow
+        /// only once the appointment has started. Cancelled is always allowed from Pending / Confirmed.
+        /// </summary>
+        public static IReadOnlyList<BookingStatus> GetAllowedTransitions(BookingStatus current, DateTime start, DateTime localNow)
+        {
+            if (!AllowedTransitions.TryGetValue(current, out var next))
+                return Array.Empty<BookingStatus>();
+
+            return next.Where(s => !RequiresStarted(s) || localNow >= start).ToList();
+        }
+
+        private static bool RequiresStarted(BookingStatus status) =>
+            status == BookingStatus.InProgress || status == BookingStatus.Completed || status == BookingStatus.NoShow;
+
         private readonly ApplicationDbContext _context;
         private readonly IRepository<StylistOffDay> _offDayRepository;
         private readonly ISalonClock _clock;
@@ -208,8 +223,7 @@ namespace ZAYNA.Infrastructure.Services
 
             // The appointment must have started before it can be in progress, completed or a no-show.
             var start = booking.BookingDate.Date + booking.StartTime;
-            if ((status == BookingStatus.InProgress || status == BookingStatus.Completed || status == BookingStatus.NoShow)
-                && _clock.LocalNow < start)
+            if (RequiresStarted(status) && _clock.LocalNow < start)
                 throw new AppException("TOO_EARLY",
                     "This status can only be set once the appointment time has started.", 409);
 

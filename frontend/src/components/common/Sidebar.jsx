@@ -1,6 +1,6 @@
 // src/components/common/Sidebar.jsx
 import { Link, useNavigate } from 'react-router-dom';
-import { FiHome, FiCalendar, FiUsers, FiSettings, FiLogOut, FiMenu, FiX, FiCheckCircle } from 'react-icons/fi';
+import { FiHome, FiCalendar, FiUsers, FiSettings, FiLogOut, FiMenu, FiX, FiCheckCircle, FiScissors, FiMapPin } from 'react-icons/fi';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
@@ -30,10 +30,12 @@ const Sidebar = () => {
       { icon: FiSettings, label: t('customer.profile'), path: '/dashboard/profile' },
     ],
     SALON: [
-      { icon: FiHome, label: t('salon.dashboard'), path: '/dashboard' },
+      { icon: FiHome, label: t('salon.dashboard'), path: '/salon/dashboard' },
       { icon: FiCalendar, label: t('salon.appointments'), path: '/salon/appointments' },
+      { icon: FiScissors, label: t('salon.services'), path: '/salon/services' },
       { icon: FiUsers, label: t('salon.stylists'), path: '/salon/stylists' },
-      { icon: FiSettings, label: t('salon.settings'), path: '/salon/settings' },
+      { icon: FiMapPin, label: t('owner.branchesTitle', 'Branches & hours'), path: '/salon/branches' },
+      { icon: FiSettings, label: t('owner.settingsTitle', 'Salon profile'), path: '/salon/settings' },
     ],
     STYLIST: [
       { icon: FiHome, label: t('stylist.dashboard'), path: '/dashboard' },

@@ -1,204 +1,179 @@
 // ============================================
 // src/components/salon/Appointments.jsx
+// The salon's real bookings. Action buttons come from the server (allowedStatuses), so the screen can only
+// offer changes the server will accept.
 // ============================================
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'react-toastify';
 import Layout from '../common/Layout';
-import { salonService } from '../../services/salonService';
-import { useAuth } from '../../contexts/AuthContext';
+import { ownerService } from '../../services/ownerService';
+import { ErrorState, PaginationBar, Spinner } from '../admin/adminUi';
+import { BOOKING_STATUS, formatBookingDate, formatMoney } from '../../utils/bookingFormat';
+import { PageHeader, localName } from './ownerUi';
 
-import { FiCalendar, FiSearch, FiFilter } from 'react-icons/fi';
-import { format } from 'date-fns';
+const PAGE_SIZE = 20;
 
-
+const ACTIONS = {
+  1: { key: 'confirm', label: 'Confirm', cls: 'btn-primary py-1 px-3 text-sm' },
+  2: { key: 'start', label: 'Start', cls: 'btn-outline py-1 px-3 text-sm' },
+  3: { key: 'complete', label: 'Complete', cls: 'btn-primary py-1 px-3 text-sm' },
+  5: { key: 'noShow', label: 'No-show', cls: 'btn-outline py-1 px-3 text-sm' },
+  4: { key: 'cancel', label: 'Cancel', cls: 'text-red-600 hover:underline text-sm' },
+};
+const ACTION_ORDER = [1, 2, 3, 5, 4];
 
 const Appointments = () => {
-  const { t } = useTranslation();
-      const { user } = useAuth();
-  
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [filter, setFilter] = useState('all');
-  const [appointments, setAppointments] = useState([
-    {
-      id: '1',
-      time: '09:00',
-      customerName: 'Ahmed Al-Said',
-      customerPhone: '+96891234567',
-      service: 'Haircut + Beard',
-      stylist: 'Mohammed',
-      price: 8.0,
-      status: 'Confirmed',
-      notes: 'Prefers short hair',
-    },
-    {
-      id: '2',
-      time: '10:30',
-      customerName: 'Khalid Al-Balushi',
-      customerPhone: '+96892345678',
-      service: 'Haircut',
-      stylist: 'Ali',
-      price: 5.0,
-      status: 'Pending',
-      notes: '',
-    },
-    {
-      id: '3',
-      time: '14:00',
-      customerName: 'Saeed Al-Hinai',
-      customerPhone: '+96893456789',
-      service: 'Full Package',
-      stylist: 'Mohammed',
-      price: 10.0,
-      status: 'Confirmed',
-      notes: 'Regular customer',
-    },
-  ]
-);
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  const [scope, setScope] = useState('today');
+  const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
+  const [bookings, setBookings] = useState([]);
+  const [counts, setCounts] = useState({ today: 0, upcoming: 0, past: 0 });
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const requestId = useRef(0);
 
-  const fetchDashboardData = async () => {
+  const load = useCallback(async () => {
+    const id = ++requestId.current;
+    setLoading(true);
+    setError(false);
     try {
-            const salon = await salonService.getSalonByUserId(user?.userId);
-            const bookings = await salonService.getSalonBookings(salon?.salon.id);
-      console.log(bookings);
-      
-          }
-    catch{};
-        };
+      const data = await ownerService.getAppointments({ scope, status, page, pageSize: PAGE_SIZE });
+      if (id !== requestId.current) return;
+      setBookings(data.bookings || []);
+      setTotal(data.total || 0);
+      setCounts(data.counts || { today: 0, upcoming: 0, past: 0 });
+    } catch {
+      if (id === requestId.current) setError(true);
+    } finally {
+      if (id === requestId.current) setLoading(false);
+    }
+  }, [scope, status, page]);
 
-  const filteredAppointments = appointments.filter((apt) => {
-    if (filter === 'all') return true;
-    return apt.status.toLowerCase() === filter;
-  });
+  useEffect(() => { load(); }, [load]);
 
-  const updateStatus = (id, newStatus) => {
-    setAppointments(
-      appointments.map((apt) => (apt.id === id ? { ...apt, status: newStatus } : apt))
-    );
+  const changeScope = (s) => { setScope(s); setPage(1); };
+
+  const act = async (booking, target) => {
+    if (target === 4 && !window.confirm(t('owner.confirmCancelBooking', 'Cancel this booking? The customer will see it as cancelled.'))) return;
+    setBusyId(booking.id);
+    try {
+      if (target === 4) await ownerService.cancelBooking(booking.id);
+      else await ownerService.updateBookingStatus(booking.id, target);
+      toast.success(t('owner.saved', 'Saved'));
+    } catch (err) {
+      toast.error(err.response?.data?.message || t('common.error'));
+    } finally {
+      setBusyId(null);
+      await load(); // always refresh: the booking may have changed in the meantime
+    }
   };
 
-
+  const tabs = [
+    { key: 'today', label: t('owner.tabToday', 'Today'), count: counts.today },
+    { key: 'upcoming', label: t('owner.tabUpcoming', 'Upcoming'), count: counts.upcoming },
+    { key: 'past', label: t('owner.tabPast', 'Past'), count: counts.past },
+  ];
 
   return (
     <Layout>
       <div className="max-w-7xl mx-auto">
-        <div className="ltr:ml-8 rtl:mr-8">
-          <h1 className="text-3xl font-bold text-primary mb-8">{t('salon.appointments')}</h1>
-        </div>
-        {/* Filters */}
+        <PageHeader title={t('salon.appointments', 'Appointments')} subtitle={t('owner.appointmentsSubtitle', 'Manage your bookings')} />
+
         <div className="card mb-6">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium mb-2">Date</label>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="input-field"
-              />
+          <div className="flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex gap-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => changeScope(tab.key)}
+                  className={scope === tab.key ? 'px-4 py-2 bg-primary text-white rounded-lg' : 'px-4 py-2 border rounded-lg hover:bg-gray-50'}
+                >
+                  {tab.label} ({tab.count})
+                </button>
+              ))}
             </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium mb-2">Status</label>
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="input-field"
-              >
-                <option value="all">All Appointments</option>
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-sm font-medium mb-2">Search</label>
-              <div className="relative">
-                <FiSearch className="absolute left-3 top-3 text-gray-400" />
-                <input type="text" placeholder="Search customer..." className="input-field pl-10" />
-              </div>
-            </div>
+            <select
+              aria-label={t('admin.status', 'Status')}
+              value={status}
+              onChange={(e) => { setStatus(e.target.value); setPage(1); }}
+              className="input-field w-auto min-w-[180px]"
+            >
+              <option value="">{t('admin.allStatuses', 'All Statuses')}</option>
+              {Object.entries(BOOKING_STATUS).map(([value, s]) => (
+                <option key={value} value={value}>{t(`admin.status_${s.key}`, s.label)}</option>
+              ))}
+            </select>
           </div>
         </div>
 
-        {/* Appointments List */}
         <div className="card">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4">Time</th>
-                  <th className="text-left py-3 px-4">Customer</th>
-                  <th className="text-left py-3 px-4">Service</th>
-                  <th className="text-left py-3 px-4">Stylist</th>
-                  <th className="text-left py-3 px-4">Price</th>
-                  <th className="text-left py-3 px-4">Status</th>
-                  <th className="text-left py-3 px-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAppointments.map((appointment) => (
-                  <tr key={appointment.id} className="border-b hover:bg-gray-50">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center">
-                        <FiCalendar className="mr-2 text-primary" />
-                        <span className="font-semibold">{appointment.time}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div>
-                        <p className="font-semibold">{appointment.customerName}</p>
-                        <p className="text-sm text-gray-600">{appointment.customerPhone}</p>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <p>{appointment.service}</p>
-                      {appointment.notes && (
-                        <p className="text-xs text-gray-600 mt-1">Note: {appointment.notes}</p>
-                      )}
-                    </td>
-                    <td className="py-4 px-4">{appointment.stylist}</td>
-                    <td className="py-4 px-4">
-                      <span className="font-semibold text-primary">{appointment.price} OMR</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <select
-                        value={appointment.status}
-                        onChange={(e) => updateStatus(appointment.id, e.target.value)}
-                        className={`badge cursor-pointer ${
-                          appointment.status === 'Confirmed'
-                            ? 'badge-confirmed'
-                            : appointment.status === 'Pending'
-                              ? 'badge-pending'
-                              : appointment.status === 'Completed'
-                                ? 'badge-completed'
-                                : 'badge-cancelled'
-                        }`}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Confirmed">Confirmed</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </select>
-                    </td>
-                    <td className="py-4 px-4">
-                      <button className="text-primary hover:underline text-sm">Details</button>
-                    </td>
+          {loading && bookings.length === 0 ? (
+            <Spinner />
+          ) : error ? (
+            <ErrorState onRetry={load} />
+          ) : bookings.length === 0 ? (
+            <p className="text-gray-600 py-8 text-center">{t('owner.noAppointments', 'No bookings here.')}</p>
+          ) : (
+            <div className={`overflow-x-auto ${loading ? 'opacity-60' : ''}`}>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4">{t('admin.customer', 'Customer')}</th>
+                    <th className="text-left py-3 px-4">{t('admin.service', 'Service')}</th>
+                    <th className="text-left py-3 px-4">{t('admin.dateTime', 'Date & Time')}</th>
+                    <th className="text-left py-3 px-4">{t('admin.amount', 'Amount')}</th>
+                    <th className="text-left py-3 px-4">{t('admin.status', 'Status')}</th>
+                    <th className="text-left py-3 px-4">{t('admin.actions', 'Actions')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {filteredAppointments.length === 0 && (
-              <div className="text-center py-12">
-                <FiCalendar className="mx-auto text-5xl text-gray-300 mb-4" />
-                <p className="text-gray-500">No appointments found</p>
-              </div>
-            )}
-          </div>
+                </thead>
+                <tbody>
+                  {bookings.map((b) => {
+                    const s = BOOKING_STATUS[b.status];
+                    const actions = ACTION_ORDER.filter((a) => b.allowedStatuses.includes(a));
+                    return (
+                      <tr key={b.id} className="border-b hover:bg-gray-50">
+                        <td className="py-4 px-4">
+                          <p className="font-semibold">{b.customer?.name || '-'}</p>
+                          <p className="text-sm text-gray-600">{b.customer?.phone || b.customer?.email || ''}</p>
+                          <p className="text-xs text-gray-400 font-mono">{b.bookingNumber}</p>
+                        </td>
+                        <td className="py-4 px-4">
+                          <p>{localName(lang, b.service.name, b.service.nameAr)}</p>
+                          <p className="text-sm text-gray-600">{localName(lang, b.stylist.name, b.stylist.nameAr)} - {localName(lang, b.branch.name, b.branch.nameAr)}</p>
+                          {b.notes && <p className="text-xs text-gray-500 mt-1">{b.notes}</p>}
+                        </td>
+                        <td className="py-4 px-4">
+                          <p>{formatBookingDate(b.bookingDate, lang)}</p>
+                          <p className="text-sm text-gray-600">{b.startTime} - {b.endTime}</p>
+                        </td>
+                        <td className="py-4 px-4"><span className="font-semibold text-primary">{formatMoney(b.totalAmount)}</span></td>
+                        <td className="py-4 px-4">
+                          <span className={`badge ${s?.badge || ''}`}>{s ? t(`admin.status_${s.key}`, s.label) : b.status}</span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {actions.length === 0 && <span className="text-gray-400 text-sm">-</span>}
+                            {actions.map((a) => (
+                              <button key={a} className={`${ACTIONS[a].cls} disabled:opacity-50`} disabled={busyId === b.id} onClick={() => act(b, a)}>
+                                {t(`owner.action_${ACTIONS[a].key}`, ACTIONS[a].label)}
+                              </button>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {!error && <PaginationBar page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />}
         </div>
       </div>
     </Layout>

@@ -21,6 +21,10 @@ import BookingDetails from './components/customer/BookingDetails';
 import SalonDashboard from './components/salon/Dashboard';
 import Appointments from './components/salon/Appointments';
 import StylistManagement from './components/salon/StylistManagement';
+import SalonServices from './components/salon/Services';
+import BranchManagement from './components/salon/BranchManagement';
+import SalonSettings from './components/salon/SalonSettings';
+import { OwnerProvider } from './components/salon/OwnerContext';
 import AdminDashboard from './components/admin/Dashboard';
 import Reports from './components/admin/Reports';
 import Users from './components/admin/Users';
@@ -91,34 +95,24 @@ function App() {
                 }
               />
 
-              {/* Salon Routes */}
+              {/* Salon Routes: one layout route = sidebar + the owner's salon data on EVERY salon page */}
               <Route
-                path="/salon/dashboard"
                 element={
                   <ProtectedRoute allowedRoles={[ROLES.SALON]}>
-                    <Sidebar/>
-                    <SalonDashboard />
+                    <OwnerProvider>
+                      <Sidebar />
+                      <Outlet />
+                    </OwnerProvider>
                   </ProtectedRoute>
                 }
-              />
-              <Route
-                path="/salon/appointments"
-                element={
-                  <ProtectedRoute allowedRoles={[ROLES.SALON]}>
-                    <Sidebar/>
-                    <Appointments />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/salon/Stylists"
-                element={
-                  <ProtectedRoute allowedRoles={[ROLES.SALON]}>
-                    <Sidebar/>
-                    <StylistManagement/>
-                  </ProtectedRoute>
-                }
-              />
+              >
+                <Route path="/salon/dashboard" element={<SalonDashboard />} />
+                <Route path="/salon/appointments" element={<Appointments />} />
+                <Route path="/salon/services" element={<SalonServices />} />
+                <Route path="/salon/stylists" element={<StylistManagement />} />
+                <Route path="/salon/branches" element={<BranchManagement />} />
+                <Route path="/salon/settings" element={<SalonSettings />} />
+              </Route>
 
               {/* Admin Routes: one layout route guarantees the sidebar on EVERY admin page */}
               <Route

@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Zayna.API.Mapping;
 using Zayna.Core.DTOs;
 using Zayna.Core.Interfaces;
 using ZAYNA.Core.Entities;
@@ -304,66 +305,7 @@ namespace Zayna.API.Controllers
         // =====================================================================
 
         private BookingResponseDto ToDto(Booking b, bool forCustomer, bool includeCustomer)
-        {
-            var start = b.BookingDate.Date + b.StartTime;
-            var cancellableStatus = b.Status == BookingStatus.Pending || b.Status == BookingStatus.Confirmed;
-            var enoughNotice = start - _clock.LocalNow >= TimeSpan.FromHours(_policy.CancellationCutoffHours);
-
-            return new BookingResponseDto
-            {
-                Id = b.Id,
-                BookingNumber = b.BookingNumber,
-                Status = (int)b.Status,
-                PaymentType = (int)b.PaymentType,
-                TotalAmount = b.TotalPrice,
-                Notes = b.Notes,
-                BookingDate = b.BookingDate.ToString("yyyy-MM-dd"),
-                StartTime = b.StartTime.ToString(@"hh\:mm"),
-                EndTime = b.EndTime.ToString(@"hh\:mm"),
-                CreatedAt = b.CreatedAt,
-                CancelledAt = b.CancelledAt,
-                CancellationReason = b.CancellationReason,
-                CanCancel = cancellableStatus && (!forCustomer || enoughNotice),
-                Salon = new BookingSalonInfo
-                {
-                    Id = b.SalonId,
-                    Name = b.Salon?.SalonName ?? "",
-                    NameAr = b.Salon?.SalonNameAr,
-                    Phone = b.Salon?.ContactPhone
-                },
-                Branch = new BookingBranchInfo
-                {
-                    Id = b.BranchId,
-                    Name = b.Branch?.BranchName ?? "",
-                    NameAr = b.Branch?.BranchNameAr,
-                    Address = b.Branch?.AddressLine,
-                    City = b.Branch?.City
-                },
-                Stylist = new BookingStylistInfo
-                {
-                    Id = b.StylistId,
-                    Name = b.Stylist?.FullName ?? "",
-                    NameAr = b.Stylist?.FullNameAr
-                },
-                Service = new BookingServiceInfo
-                {
-                    Id = b.ServiceId,
-                    Name = b.Service?.ServiceName ?? "",
-                    NameAr = b.Service?.ServiceNameAr,
-                    DurationMinutes = b.Service?.DurationMinutes ?? 0,
-                    Price = b.TotalPrice
-                },
-                Customer = includeCustomer && b.Customer != null
-                    ? new BookingCustomerInfo
-                    {
-                        Id = b.CustomerId,
-                        Name = b.Customer.FullName,
-                        Phone = b.Customer.User?.PhoneNumber,
-                        Email = b.Customer.User?.Email
-                    }
-                    : null
-            };
-        }
+            => BookingMapper.ToDto(b, forCustomer, includeCustomer, _clock, _policy);
 
         private bool TryGetCurrentUserId(out Guid userId)
         {
