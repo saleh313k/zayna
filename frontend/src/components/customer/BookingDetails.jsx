@@ -1,305 +1,200 @@
 // ============================================
 // src/components/customer/BookingDetails.jsx
 // ============================================
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { bookingService } from '../../services/bookingService';
-import { format } from 'date-fns';
 import { toast } from 'react-toastify';
+import { FiCalendar, FiClock, FiMapPin, FiPhone, FiUser, FiScissors, FiCheckCircle } from 'react-icons/fi';
 import Layout from '../common/Layout';
-import { FiCalendar, FiClock, FiMapPin, FiUser, FiDollarSign, FiX } from 'react-icons/fi';
+import { bookingService } from '../../services/bookingService';
+import { BOOKING_STATUS, formatBookingDate, formatMoney, localized } from '../../utils/bookingFormat';
 
 const BookingDetails = () => {
-  const { t } = useTranslation();
   const { id } = useParams();
-  const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
+  const location = useLocation();
+  const justBooked = Boolean(location.state?.justBooked);
+
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [cancelModal, setCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState(false);
+
   const [cancelling, setCancelling] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
+  const [reason, setReason] = useState('');
 
-  useEffect(() => {
-    fetchBooking();
-  }, [id]);
-
-  const fetchBooking = async () => {
+  const load = useCallback(async () => {
+    setError(false);
     try {
       const data = await bookingService.getBookingById(id);
-      setBooking(data);
-    } catch (error) {
-      toast.error(t('common.error'));
-      navigate('/bookings');
+      setBooking(data.booking);
+    } catch (e) {
+      if (e.response?.status === 404) setNotFound(true);
+      else setError(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const handleCancel = async () => {
-    if (!cancelReason.trim()) {
-      toast.error('Please provide a cancellation reason');
-      return;
-    }
+  useEffect(() => { load(); }, [load]);
 
+  const cancel = async () => {
     setCancelling(true);
     try {
-      await bookingService.cancelBooking(id, cancelReason);
-      toast.success('Booking cancelled successfully');
-      setCancelModal(false);
-      fetchBooking();
-    } catch (error) {
-      toast.error(error.response?.data?.message || t('common.error'));
+      await bookingService.cancelBooking(id, reason.trim());
+      toast.success(t('bookingDetails.cancelled', 'Your booking was cancelled.'));
+      setShowCancel(false);
+      await load();
+    } catch (e) {
+      toast.error(e.response?.data?.message || t('common.error'));
+      await load(); // the booking may have changed (e.g. the cancellation window just closed)
     } finally {
       setCancelling(false);
     }
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      Pending: 'bg-yellow-100 text-yellow-800',
-      Confirmed: 'bg-green-100 text-green-800',
-      Completed: 'bg-blue-100 text-blue-800',
-      Cancelled: 'bg-red-100 text-red-800'
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getPaymentStatusColor = (status) => {
-    const colors = {
-      Pending: 'bg-yellow-100 text-yellow-800',
-      Paid: 'bg-green-100 text-green-800',
-      Failed: 'bg-red-100 text-red-800',
-      Refunded: 'bg-purple-100 text-purple-800'
-    };
-    return colors[status] || 'bg-gray-100 text-gray-800';
-  };
-
   if (loading) {
+    return <Layout><div className="flex justify-center items-center h-64"><div className="spinner"></div></div></Layout>;
+  }
+
+  if (notFound || error || !booking) {
     return (
       <Layout>
-        <div className="flex justify-center items-center h-64">
-          <div className="spinner"></div>
+        <div className="max-w-2xl mx-auto card text-center py-12">
+          <p className="text-gray-700 mb-4">
+            {notFound
+              ? t('bookingDetails.notFound', 'Booking not found.')
+              : t('bookingDetails.loadError', 'Could not load this booking. Please try again.')}
+          </p>
+          <Link to="/dashboard" className="btn-primary">{t('bookingDetails.backToBookings', 'Back to my bookings')}</Link>
         </div>
       </Layout>
     );
   }
 
-  if (!booking) return null;
+  const status = BOOKING_STATUS[booking.status];
+  const isActive = booking.status === 0 || booking.status === 1;
+  const mapQuery = encodeURIComponent([booking.branch.address, booking.branch.city].filter(Boolean).join(', '));
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-primary mb-2">
-              {t('common.viewDetails')}
-            </h1>
-            <p className="text-gray-600">Booking ID: {booking.id.substring(0, 8)}</p>
-          </div>
-          <span className={`badge ${getStatusColor(booking.status)}`}>
-            {t(`status.${booking.status.toLowerCase()}`)}
-          </span>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Main Details */}
-          <div className="md:col-span-2 space-y-6">
-            {/* Salon & Service Info */}
-            <div className="card">
-              <h2 className="text-xl font-semibold mb-4">Service Details</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm text-gray-600">Salon</label>
-                  <p className="font-semibold text-lg">{booking.salon?.name}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Service</label>
-                  <p className="font-semibold">{booking.service?.name}</p>
-                  <p className="text-sm text-gray-600">{booking.service?.durationMinutes} minutes</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Stylist</label>
-                  <p className="font-semibold">{booking.stylist?.user?.fullName}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Appointment Details */}
-            <div className="card">
-              <h2 className="text-xl font-semibold mb-4">Appointment Details</h2>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="flex items-start space-x-3">
-                  <FiCalendar className="text-primary text-xl mt-1" />
-                  <div>
-                    <label className="text-sm text-gray-600">Date</label>
-                    <p className="font-semibold">
-                      {format(new Date(booking.bookingDate), 'EEEE, dd MMMM yyyy')}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <FiClock className="text-primary text-xl mt-1" />
-                  <div>
-                    <label className="text-sm text-gray-600">Time</label>
-                    <p className="font-semibold">
-                      {booking.startTime} - {booking.endTime}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <FiMapPin className="text-primary text-xl mt-1" />
-                  <div>
-                    <label className="text-sm text-gray-600">Location</label>
-                    <p className="font-semibold">{booking.branch?.name}</p>
-                    <p className="text-sm text-gray-600">{booking.branch?.address}</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <FiDollarSign className="text-primary text-xl mt-1" />
-                  <div>
-                    <label className="text-sm text-gray-600">Total Price</label>
-                    <p className="font-semibold text-primary text-xl">
-                      {booking.totalPrice} OMR
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {booking.notes && (
-                <div className="mt-4 pt-4 border-t">
-                  <label className="text-sm text-gray-600">Notes</label>
-                  <p className="text-gray-800">{booking.notes}</p>
-                </div>
-              )}
-            </div>
-
-            {/* Payment Details */}
-            <div className="card">
-              <h2 className="text-xl font-semibold mb-4">Payment Information</h2>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Payment Method</span>
-                  <span className="font-semibold">
-                    {booking.payment?.method === 'Cash' ? 'Pay In Person' : 'Online Payment'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Status</span>
-                  <span className={`badge ${getPaymentStatusColor(booking.payment?.status)}`}>
-                    {booking.payment?.status}
-                  </span>
-                </div>
-                {booking.payment?.paidAt && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Paid At</span>
-                    <span className="font-semibold">
-                      {format(new Date(booking.payment.paidAt), 'dd MMM yyyy HH:mm')}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="md:col-span-1">
-            {/* Actions */}
-            {booking.status !== 'Cancelled' && booking.status !== 'Completed' && (
-              <div className="card space-y-3">
-                <h3 className="font-semibold mb-4">Actions</h3>
-                <button
-                  onClick={() => setCancelModal(true)}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  <FiX />
-                  <span>{t('customer.cancelBooking')}</span>
-                </button>
-              </div>
-            )}
-
-            {/* Booking Timeline */}
-            <div className="card mt-6">
-              <h3 className="font-semibold mb-4">Timeline</h3>
-              <div className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
-                  <div>
-                    <p className="font-medium">Booking Created</p>
-                    <p className="text-sm text-gray-600">
-                      {format(new Date(booking.createdAt), 'dd MMM yyyy HH:mm')}
-                    </p>
-                  </div>
-                </div>
-                {booking.status === 'Confirmed' && (
-                  <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                    <div>
-                      <p className="font-medium">Confirmed</p>
-                    </div>
-                  </div>
-                )}
-                {booking.cancelledAt && (
-                  <div className="flex items-start space-x-3">
-                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
-                    <div>
-                      <p className="font-medium">Cancelled</p>
-                      <p className="text-sm text-gray-600">
-                        {format(new Date(booking.cancelledAt), 'dd MMM yyyy HH:mm')}
-                      </p>
-                      {booking.cancellationReason && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          Reason: {booking.cancellationReason}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Cancel Modal */}
-        {cancelModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl max-w-md w-full p-6">
-              <h3 className="text-xl font-semibold mb-4">
-                {t('customer.confirmCancel')}
-              </h3>
-              <p className="text-gray-600 mb-4">
-                Are you sure you want to cancel this booking? This action cannot be undone.
+      <div className="max-w-3xl mx-auto">
+        {justBooked && (
+          <div className="card bg-green-50 border border-green-200 mb-6 flex items-start gap-3">
+            <FiCheckCircle className="text-green-600 text-2xl mt-0.5" />
+            <div>
+              <p className="font-semibold text-green-800">
+                {booking.status === 1
+                  ? t('bookingDetails.justBookedConfirmed', 'Your booking is confirmed!')
+                  : t('bookingDetails.justBookedPending', 'Your booking was received and is waiting for the salon to confirm.')}
               </p>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                placeholder={t('customer.cancellationReason')}
-                className="input-field mb-4"
-                rows="3"
-              />
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => setCancelModal(false)}
-                  className="flex-1 btn-outline"
-                  disabled={cancelling}
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  onClick={handleCancel}
-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-6 rounded-lg transition-colors"
-                  disabled={cancelling}
-                >
-                  {cancelling ? t('common.loading') : 'Confirm Cancel'}
-                </button>
-              </div>
+              <p className="text-sm text-green-700">{t('bookingDetails.keepNumber', 'Keep your booking number for reference.')}</p>
             </div>
           </div>
         )}
+
+        <div className="flex justify-between items-start mb-6 gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-primary">{t('bookingDetails.title', 'Booking details')}</h1>
+            <p className="text-gray-600 font-mono">{booking.bookingNumber}</p>
+          </div>
+          <span className={`badge ${status?.badge || ''}`}>{status ? t(`admin.status_${status.key}`, status.label) : booking.status}</span>
+        </div>
+
+        <div className="card space-y-4 mb-6">
+          <h2 className="text-xl font-semibold">{localized(lang, booking.salon.name, booking.salon.nameAr)}</h2>
+
+          <Detail icon={FiScissors} label={t('bookingFlow.stepService', 'Service')}
+            value={`${localized(lang, booking.service.name, booking.service.nameAr)} (${booking.service.durationMinutes} ${t('bookingFlow.min', 'min')})`} />
+          <Detail icon={FiUser} label={t('bookingFlow.stepStylist', 'Stylist')} value={localized(lang, booking.stylist.name, booking.stylist.nameAr)} />
+          <Detail icon={FiCalendar} label={t('bookingFlow.date', 'Date')} value={formatBookingDate(booking.bookingDate, lang)} />
+          <Detail icon={FiClock} label={t('bookingDetails.time', 'Time')} value={`${booking.startTime} - ${booking.endTime}`} />
+          <Detail
+            icon={FiMapPin}
+            label={t('bookingFlow.branch', 'Branch')}
+            value={[localized(lang, booking.branch.name, booking.branch.nameAr), booking.branch.address, booking.branch.city].filter(Boolean).join(', ')}
+          />
+          {mapQuery && (
+            <a className="text-primary text-sm hover:underline inline-block"
+              href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer">
+              {t('salon.getDirections', 'Get Directions')}
+            </a>
+          )}
+          {booking.salon.phone && (
+            <Detail icon={FiPhone} label={t('bookingDetails.salonPhone', 'Salon phone')}
+              value={<a className="text-primary hover:underline" href={`tel:${booking.salon.phone}`}>{booking.salon.phone}</a>} />
+          )}
+
+          {booking.notes && (
+            <div className="border-t pt-3">
+              <p className="text-sm text-gray-600">{t('bookingFlow.notes', 'Notes for the salon (optional)')}</p>
+              <p>{booking.notes}</p>
+            </div>
+          )}
+
+          <div className="border-t pt-4 flex justify-between items-center">
+            <span className="text-gray-600">
+              {booking.paymentType === 0 ? t('admin.paymentOnline', 'Online') : t('bookingFlow.payAtSalon', 'Pay at the salon')}
+            </span>
+            <span className="font-bold text-primary text-xl">{formatMoney(booking.totalAmount)}</span>
+          </div>
+        </div>
+
+        {booking.status === 4 && booking.cancellationReason && (
+          <div className="card mb-6">
+            <p className="text-sm text-gray-600">{t('bookingDetails.cancelReason', 'Cancellation reason')}</p>
+            <p>{booking.cancellationReason}</p>
+          </div>
+        )}
+
+        {/* Cancel */}
+        {isActive && booking.canCancel && !showCancel && (
+          <button className="text-red-600 hover:underline" onClick={() => setShowCancel(true)}>
+            {t('customer.cancelBooking', 'Cancel booking')}
+          </button>
+        )}
+        {isActive && !booking.canCancel && (
+          <p className="text-sm text-gray-600">
+            {t('bookingDetails.cannotCancel', 'This booking can no longer be cancelled online. Please contact the salon.')}
+          </p>
+        )}
+        {showCancel && (
+          <div className="card space-y-3">
+            <label className="block font-semibold" htmlFor="cancel-reason">
+              {t('bookingDetails.reasonLabel', 'Reason (optional)')}
+            </label>
+            <textarea id="cancel-reason" rows={3} maxLength={500} value={reason}
+              onChange={(e) => setReason(e.target.value)} className="input-field" />
+            <div className="flex gap-3">
+              <button className="btn-outline" disabled={cancelling} onClick={() => setShowCancel(false)}>
+                {t('bookingDetails.keepBooking', 'Keep booking')}
+              </button>
+              <button className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50" disabled={cancelling} onClick={cancel}>
+                {cancelling ? t('common.loading', 'Loading...') : t('bookingDetails.confirmCancel', 'Yes, cancel booking')}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8">
+          <Link to="/dashboard" className="text-primary hover:underline">{t('bookingDetails.backToBookings', 'Back to my bookings')}</Link>
+        </div>
       </div>
     </Layout>
   );
 };
+
+const Detail = ({ icon: Icon, label, value }) => (
+  <div className="flex items-start gap-3">
+    <Icon className="text-primary mt-1" />
+    <div>
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="font-medium">{value}</p>
+    </div>
+  </div>
+);
 
 export default BookingDetails;

@@ -118,7 +118,7 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.SalonId)
                 .OnDelete(DeleteBehavior.Cascade);
             
-            entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Price).HasColumnType("decimal(18,3)"); // OMR has 3 decimal places
         });
 
         // StylistService (Many-to-Many)
@@ -167,8 +167,22 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.ServiceId)
                 .OnDelete(DeleteBehavior.Restrict);
             
-            entity.Property(e => e.TotalPrice).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.TotalPrice).HasColumnType("decimal(18,3)");
             entity.HasIndex(e => e.BookingDate);
+
+            // TotalAmount is only a convenience wrapper over TotalPrice. Persisting it created a second, 2-decimal
+            // column whose value could overwrite the exact TotalPrice when a booking was read back.
+            entity.Ignore(e => e.TotalAmount);
+
+            // Booking numbers are unique when present (older rows may have none).
+            entity.HasIndex(e => e.BookingNumber).IsUnique();
+
+            // Database-level backstop against double booking: one live booking per stylist, date and start time.
+            // (Status 4 = Cancelled, which frees the slot.) Overlaps of different lengths are prevented by the
+            // per-stylist lock in BookingService; this index guarantees it even if that lock were ever bypassed.
+            entity.HasIndex(e => new { e.StylistId, e.BookingDate, e.StartTime })
+                  .IsUnique()
+                  .HasFilter("[Status] <> 4");
         });
 
         // Payment
@@ -180,7 +194,7 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey<Payment>(e => e.BookingId)
                 .OnDelete(DeleteBehavior.Cascade);
             
-            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,3)");
         });
 
         // Notification

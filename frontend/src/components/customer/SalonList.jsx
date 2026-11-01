@@ -6,6 +6,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { salonService } from '../../services/salonService';
+import { bookingService } from '../../services/bookingService';
+import { formatMoney, localized } from '../../utils/bookingFormat';
 import Layout from '../common/Layout';
 import { FiMapPin, FiPhone, FiStar } from 'react-icons/fi';
 import { useAuth } from '../../contexts/AuthContext';
@@ -14,13 +16,23 @@ import { toSlug } from './SalonDetail';
 
 
 const SalonList = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
 
   const [salons, setSalons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [revealedPhones, setRevealedPhones] = useState({});
+  // Registered, approved salons that can be booked online with Zayna (separate from the directory below).
+  const [bookable, setBookable] = useState([]);
+
+  useEffect(() => {
+    let alive = true;
+    bookingService.getBookableSalons()
+      .then((d) => alive && setBookable(d.salons || []))
+      .catch(() => alive && setBookable([])); // the directory below still works if this fails
+    return () => { alive = false; };
+  }, []);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -78,6 +90,40 @@ const SalonList = () => {
             className="input-field max-w-md"
           />
         </div>
+
+        {/* Book online with Zayna */}
+        {bookable.length > 0 && (
+          <div className="mb-10">
+            <h2 className="text-2xl font-semibold mb-4">{t('bookingFlow.bookOnlineTitle', 'Book online with Zayna')}</h2>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {bookable
+                .filter((s) => {
+                  const q = searchTerm.trim().toLowerCase();
+                  return !q || s.name?.toLowerCase().includes(q) || s.nameAr?.includes(searchTerm.trim());
+                })
+                .map((s) => (
+                  <div key={s.id} className="card hover:shadow-xl transition-all flex flex-col">
+                    <span className="self-start px-3 py-1 text-xs font-semibold rounded-full bg-green-600 text-white mb-3">
+                      {t('salon.verified', 'Verified')}
+                    </span>
+                    <h3 className="text-lg font-semibold mb-1">{localized(i18n.language, s.name, s.nameAr)}</h3>
+                    <p className="text-sm text-gray-600 flex items-center mb-4">
+                      <FiMapPin className="mr-2 rtl:mr-0 rtl:ml-2 shrink-0" />
+                      {[s.city, s.address].filter(Boolean).join(' - ') || '-'}
+                    </p>
+                    <div className="mt-auto flex justify-between items-center">
+                      <span className="text-sm text-gray-600">
+                        {t('bookingFlow.fromPrice', 'From {{price}}', { price: formatMoney(s.fromPrice) })}
+                      </span>
+                      <Link to={`/book?salonId=${s.id}`} className="btn-primary">
+                        {t('bookingFlow.bookNow', 'Book now')}
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* Grid */}
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">

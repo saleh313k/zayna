@@ -1,4 +1,5 @@
 using Google.Apis.Auth;
+using Zayna.Core.Exceptions;
 using Zayna.Core.Interfaces;
 
 namespace ZAYNA.Infrastructure.Services
@@ -42,6 +43,16 @@ namespace ZAYNA.Infrastructure.Services
             {
                 _logger.LogWarning("Rejected invalid Google ID token: {Reason}", ex.Message);
                 return null;
+            }
+            catch (HttpRequestException ex)
+            {
+                // Could not download Google's public signing keys (network, proxy, firewall, VPN...).
+                // This is not the user's fault and not an invalid token, so report it distinctly.
+                _logger.LogError(ex,
+                    "Could not reach Google to fetch signing certificates (https://www.googleapis.com/oauth2/v3/certs). " +
+                    "Check outbound network access, proxy, VPN or firewall from this server.");
+                throw new AppException("GOOGLE_UNREACHABLE",
+                    "Could not reach Google to verify your sign-in. Please try again in a moment.");
             }
         }
     }

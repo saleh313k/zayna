@@ -20,7 +20,10 @@ namespace ZAYNA.Infrastructure.Data
             await EnsureAdminAsync(context, adminEmail);
 
             if (seedDemoData)
+            {
                 await SeedDemoSalonAsync(context);
+                await SeedDemoStaffAsync(context);
+            }
         }
 
         private static async Task EnsureAdminAsync(ApplicationDbContext context, string? adminEmail)
@@ -54,6 +57,75 @@ namespace ZAYNA.Infrastructure.Data
                 user.UpdatedAt = DateTime.UtcNow;
                 await context.SaveChangesAsync();
             }
+        }
+
+        /// <summary>
+        /// Development only. Gives the demo salon two stylists who perform all its services, so the booking flow can be
+        /// exercised end to end. Safe to run repeatedly (does nothing once the salon has stylists).
+        /// </summary>
+        private static async Task SeedDemoStaffAsync(ApplicationDbContext context)
+        {
+            var salon = await context.Salons.FirstOrDefaultAsync(s => s.ContactEmail == "salon@zayna.om");
+            if (salon == null || await context.Stylists.AnyAsync(s => s.SalonId == salon.Id))
+                return;
+
+            var branch = await context.Branches.Include(b => b.WorkingHours)
+                .FirstOrDefaultAsync(b => b.SalonId == salon.Id && b.IsActive);
+            var services = await context.Services.Where(s => s.SalonId == salon.Id && s.IsActive).ToListAsync();
+            if (branch == null || services.Count == 0)
+                return;
+
+            if (!branch.WorkingHours.Any())
+            {
+                for (int day = 0; day <= 6; day++)
+                {
+                    branch.WorkingHours.Add(new BranchWorkingHours
+                    {
+                        DayOfWeek = (System.DayOfWeek)day,
+                        OpenTime = TimeSpan.FromHours(9),
+                        CloseTime = TimeSpan.FromHours(21),
+                        IsClosed = day == 5 // Friday closed
+                    });
+                }
+            }
+
+            var staff = new[]
+            {
+                (Name: "Ahmed Al-Said", NameAr: "أحمد السعيد", Phone: "+96890000001", Years: 5),
+                (Name: "Mariam Al-Balushi", NameAr: "مريم البلوشي", Phone: "+96890000002", Years: 8)
+            };
+
+            foreach (var member in staff)
+            {
+                var user = new User
+                {
+                    PhoneNumber = member.Phone,
+                    FullName = member.Name,
+                    Role = UserRole.Stylist,
+                    IsActive = true,
+                    IsPhoneVerified = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                context.Users.Add(user);
+
+                var stylist = new Stylist
+                {
+                    User = user,
+                    SalonId = salon.Id,
+                    BranchId = branch.Id,
+                    FullName = member.Name,
+                    FullNameAr = member.NameAr,
+                    YearsOfExperience = member.Years,
+                    IsActive = true
+                };
+                foreach (var service in services)
+                    stylist.StylistServices.Add(new StylistService { Service = service });
+
+                context.Stylists.Add(stylist);
+            }
+
+            await context.SaveChangesAsync();
         }
 
         private static async Task SeedDemoSalonAsync(ApplicationDbContext context)

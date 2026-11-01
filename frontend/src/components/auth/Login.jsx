@@ -2,7 +2,7 @@
 // src/components/auth/Login.jsx
 // ============================================
 import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Logo from '@/assets/img/logo.png';
 import GoogleSignIn from './GoogleSignIn';
@@ -20,9 +20,27 @@ export const homeForRole = (role) => {
   }
 };
 
+// Only same-site paths are accepted as a post-login destination (no open redirects).
+const safePath = (value) => {
+  if (typeof value !== 'string') return null;
+  let v = value.trim();
+  if (!v) return null;
+  if (!v.startsWith('/')) v = `/${v}`;
+  if (v.startsWith('//') || v.includes('\\') || /^\/[a-z][a-z0-9+.-]*:/i.test(v)) return null;
+  return v;
+};
+
 const Login = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const destination = safePath(location.state?.from) || safePath(searchParams.get('redirect'));
+
+  const afterLogin = (res) => {
+    const target = res.role === ROLES.CUSTOMER && destination ? destination : homeForRole(res.role);
+    navigate(target, { replace: true });
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
@@ -38,7 +56,7 @@ const Login = () => {
           {t('auth.googleHint', 'Sign in with your Google account to book appointments or manage your salon.')}
         </p>
 
-        <GoogleSignIn onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
+        <GoogleSignIn onSuccess={afterLogin} />
 
         <div className="flex items-center my-5">
           <div className="flex-1 border-t" />
@@ -46,7 +64,7 @@ const Login = () => {
           <div className="flex-1 border-t" />
         </div>
 
-        <EmailAuthForm forcedMode="login" onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
+        <EmailAuthForm forcedMode="login" onSuccess={afterLogin} />
 
         <p className="text-center text-sm text-gray-600 mt-6">
           {t('auth.newHere', 'New to Zayna?')}{' '}

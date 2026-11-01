@@ -1,53 +1,25 @@
 // ============================================
 // src/services/bookingService.js
+// Customer booking API. Dates are "yyyy-MM-dd" (salon local date) and times "HH:mm:ss" (salon local time),
+// exactly as the server returns them, so no time-zone conversion can move an appointment to another day.
 // ============================================
 import api from './api';
 
 export const bookingService = {
-  getAvailableSlots: async (stylistId, serviceId, date) => {
-    const response = await api.get('/booking/available-slots', {
-      params: { stylistId, serviceId, date }
-    });
-    return response.data;
-  },
+  // Public catalog: salons that can be booked online, and what one salon offers.
+  getBookableSalons: async (search) =>
+    (await api.get('/catalog/salons', { params: search ? { search } : {} })).data,
+  getBookingOptions: async (salonId) =>
+    (await api.get(`/catalog/salons/${salonId}/booking-options`)).data,
 
-  createBooking: async (bookingData) => {
-    const response = await api.post('/booking', bookingData);
-    return response.data;
-  },
+  getAvailableSlots: async (stylistId, serviceId, date) =>
+    (await api.get('/booking/available-slots', { params: { stylistId, serviceId, date } })).data,
 
-  getMyBookings: async () => {
-    const response = await api.get('/booking/my-bookings');
-    return response.data;
-  },
+  // payload: { salonId, branchId, stylistId, serviceId, bookingDate, startTime, paymentType, notes }
+  createBooking: async (payload) => (await api.post('/booking', payload)).data,
 
-  getBookingById: async (id) => {
-    const response = await api.get(`/booking/${id}`);
-    return response.data;
-  },
-
-  cancelBooking: async (id, reason) => {
-    const response = await api.post(`/booking/${id}/cancel`, reason);
-    return response.data;
-  }
-};
-
-export const getAvailableSlots = async (stylistId, date) => {
-  const response = await api.get(`/Booking/available-slots?stylistId=${stylistId}&date=${date}`);
-  return response.data;
-};
-
-export const createBooking = async (bookingData) => {
-  const response = await api.post('/Booking', bookingData);
-  return response.data;
-};
-
-export const getMyBookings = async () => {
-  const response = await api.get('/Booking/my-bookings');
-  return response.data;
-};
-
-export const cancelBooking = async (bookingId, reason) => {
-  const response = await api.post(`/Booking/${bookingId}/cancel`, { reason });
-  return response.data;
+  getMyBookings: async () => (await api.get('/booking/my-bookings')).data,
+  getBookingById: async (id) => (await api.get(`/booking/${id}`)).data,
+  cancelBooking: async (id, reason) =>
+    (await api.post(`/booking/${id}/cancel`, { reason: reason || null })).data,
 };

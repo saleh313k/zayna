@@ -190,6 +190,10 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddMemoryCache();
 
+// Booking: salon-local clock (booking dates/times are local wall-clock values) and the configurable rules.
+builder.Services.AddSingleton<ISalonClock, SalonClock>();
+builder.Services.AddSingleton<BookingPolicy>();
+
 // Brute-force protection for credential endpoints (per client IP). Behind a reverse proxy the proxy's
 // forwarded client IP must be trusted (forwarded headers) for this to see real client addresses.
 builder.Services.AddRateLimiter(options =>
@@ -250,7 +254,6 @@ if (app.Environment.IsDevelopment() == false && app.Configuration.GetValue<bool>
     app.UseHttpsRedirection();
 }
 app.UseCors("AllowReactApp");
-app.UseCors("LocalFrontend");
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();

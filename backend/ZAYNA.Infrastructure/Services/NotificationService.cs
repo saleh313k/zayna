@@ -18,6 +18,15 @@ namespace ZAYNA.Infrastructure.Services
             _emailService = emailService;
         }
 
+        // SMS is an optional channel: skipped when the customer has no phone number (Google / email sign-ups).
+        // The provider returns false when it is not configured, so a missing provider never breaks a booking.
+        private async Task TrySendSmsAsync(Booking booking, string message)
+        {
+            var phone = booking.Customer?.User?.PhoneNumber;
+            if (string.IsNullOrWhiteSpace(phone)) return;
+            await _smsService.SendAsync(phone, message);
+        }
+
         public async Task SendBookingConfirmationAsync(Booking booking)
         {
             var notification = new Notification
@@ -33,14 +42,13 @@ namespace ZAYNA.Infrastructure.Services
             await _notificationRepository.AddAsync(notification);
 
             // Send SMS
-            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
+            await TrySendSmsAsync(booking, notification.Message);
 
             // Send Email if available
-            if (!string.IsNullOrEmpty(booking.Customer.User.Email))
+            var customerEmail = booking.Customer?.User?.Email;
+            if (!string.IsNullOrEmpty(customerEmail))
             {
-                await _emailService.SendBookingConfirmationAsync(
-                    booking.Customer.User.Email,
-                    notification.Message);
+                await _emailService.SendBookingConfirmationAsync(customerEmail, notification.Message);
             }
         }
 
@@ -57,7 +65,7 @@ namespace ZAYNA.Infrastructure.Services
             };
 
             await _notificationRepository.AddAsync(notification);
-            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
+            await TrySendSmsAsync(booking, notification.Message);
         }
 
         public async Task SendBookingCancellationAsync(Booking booking)
@@ -73,7 +81,7 @@ namespace ZAYNA.Infrastructure.Services
             };
 
             await _notificationRepository.AddAsync(notification);
-            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
+            await TrySendSmsAsync(booking, notification.Message);
         }
 
         public async Task<IEnumerable<Notification>> GetUserNotificationsAsync(Guid userId)

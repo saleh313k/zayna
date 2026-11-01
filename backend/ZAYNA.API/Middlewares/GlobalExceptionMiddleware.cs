@@ -24,7 +24,7 @@ namespace ZAYNA.API.Middlewares
                 _logger.LogWarning("Application error {ErrorCode} for {Method} {Path}. TraceId: {TraceId}", ex.Code, context.Request.Method, context.Request.Path, context.TraceIdentifier);
                 if (context.Response.HasStarted) throw;
                 context.Response.Clear();
-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                context.Response.StatusCode = ex.StatusCode;
                 context.Response.ContentType = "application/json";
                 await context.Response.WriteAsJsonAsync(new { success = false, code = ex.Code, message = ex.Message, traceId = context.TraceIdentifier });
             }
