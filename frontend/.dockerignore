@@ -1,0 +1,10 @@
+# Never copy host artefacts into the build: a Windows node_modules would break the Linux build, and local
+# .env files must not leak into the production bundle (config comes only from build arguments).
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.log
+.git
+.vscode

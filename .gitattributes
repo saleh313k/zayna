@@ -1,0 +1,9 @@
+# Files that run on the Linux server must ALWAYS have LF line endings (CRLF breaks bash scripts and Caddy/SQL files),
+# regardless of the developer's Windows settings.
+*.sh text eol=lf
+deploy/Caddyfile text eol=lf
+deploy/sql/*.sql text eol=lf
+Dockerfile* text eol=lf
+*.Dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+.env.production.example text eol=lf

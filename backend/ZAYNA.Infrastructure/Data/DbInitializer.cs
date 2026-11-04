@@ -12,10 +12,24 @@ namespace ZAYNA.Infrastructure.Data
         /// this address. No password and no hardcoded credentials are ever created.
         /// </param>
         /// <param name="seedDemoData">Only true in the Development environment.</param>
-        public static async Task Initialize(ApplicationDbContext context, string? adminEmail, bool seedDemoData)
+        /// <param name="applyMigrations">false in production: verify there are no pending migrations instead of applying them.</param>
+        public static async Task Initialize(ApplicationDbContext context, string? adminEmail, bool seedDemoData, bool applyMigrations = true)
         {
-            // Never EnsureCreated: it bypasses migrations and makes later schema updates impossible.
-            await context.Database.MigrateAsync();
+            if (applyMigrations)
+            {
+                // Never EnsureCreated: it bypasses migrations and makes later schema updates impossible.
+                await context.Database.MigrateAsync();
+            }
+            else
+            {
+                // Automatic migration is off (production): never run against an outdated schema.
+                var pending = (await context.Database.GetPendingMigrationsAsync()).ToList();
+                if (pending.Count > 0)
+                    throw new InvalidOperationException(
+                        $"The database schema is out of date ({pending.Count} pending migration(s): {string.Join(", ", pending)}). " +
+                        "Apply them deliberately with 'dotnet ZAYNA.API.dll --migrate' (see docs/DEPLOYMENT.md); " +
+                        "automatic migration is disabled (Database:AutoMigrate=false).");
+            }
 
             await EnsureAdminAsync(context, adminEmail);
 

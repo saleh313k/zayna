@@ -1,0 +1,3266 @@
+From ae39d1fc9b3313632a656bad072eed5a5ba4b1e5 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Sat, 31 Oct 2026 04:37:25 +0000
+Subject: [PATCH] Booking journey end to end: atomic locked booking,
+ salon-local time, cancel/status rules, public catalog, DTO responses, rebuilt
+ customer screens, 3-decimal money
+
+---
+ .../Controllers/BookingController.cs          | 304 ++++++---
+ .../Controllers/CatalogController.cs          | 142 ++++
+ .../Middlewares/GlobalExceptionMiddleware.cs  |   2 +-
+ backend/ZAYNA.API/Program.cs                  |   4 +
+ backend/ZAYNA.API/appsettings.json            |  11 +
+ backend/ZAYNA.Core/DTOs/BookingDtos.cs        |  29 +
+ backend/ZAYNA.Core/Exceptions/AppException.cs |   4 +-
+ .../ZAYNA.Core/Interfaces/IBookingService.cs  |  41 +-
+ backend/ZAYNA.Core/Interfaces/ISalonClock.cs  |  12 +
+ .../Data/ApplicationDbContext.cs              |  20 +-
+ .../Data/DbInitializer.cs                     |  72 ++
+ .../Services/BookingPolicy.cs                 |  37 +
+ .../Services/BookingService.cs                | 232 +++++--
+ .../Services/NotificationService.cs           |  22 +-
+ .../Services/SalonClock.cs                    |  31 +
+ frontend/src/components/auth/Login.jsx        |  24 +-
+ .../components/customer/BookingDetails.jsx    | 393 ++++-------
+ .../src/components/customer/BookingFlow.jsx   | 636 +++++++++++-------
+ .../src/components/customer/Dashboard.jsx     | 169 ++---
+ .../src/components/customer/SalonList.jsx     |  48 +-
+ frontend/src/i18n/ar.json                     |  55 +-
+ frontend/src/i18n/en.json                     |  55 +-
+ frontend/src/routes/ProtectedRoute.jsx        |   5 +-
+ frontend/src/services/bookingService.js       |  64 +-
+ frontend/src/utils/bookingFormat.js           |  41 ++
+ 25 files changed, 1626 insertions(+), 827 deletions(-)
+ create mode 100644 backend/ZAYNA.API/Controllers/CatalogController.cs
+ create mode 100644 backend/ZAYNA.Core/Interfaces/ISalonClock.cs
+ create mode 100644 backend/ZAYNA.Infrastructure/Services/BookingPolicy.cs
+ create mode 100644 backend/ZAYNA.Infrastructure/Services/SalonClock.cs
+ create mode 100644 frontend/src/utils/bookingFormat.js
+
+diff --git a/backend/ZAYNA.API/Controllers/BookingController.cs b/backend/ZAYNA.API/Controllers/BookingController.cs
+index ffe052b..309b455 100644
+--- a/backend/ZAYNA.API/Controllers/BookingController.cs
++++ b/backend/ZAYNA.API/Controllers/BookingController.cs
+@@ -2,9 +2,12 @@
+ using Microsoft.AspNetCore.Authorization;
+ using Microsoft.AspNetCore.Mvc;
+ using System.Security.Claims;
++using Zayna.Core.DTOs;
++using Zayna.Core.Interfaces;
+ using ZAYNA.Core.Entities;
+ using ZAYNA.Core.Enums;
+ using ZAYNA.Core.Interfaces;
++using ZAYNA.Infrastructure.Services;
+ 
+ namespace Zayna.API.Controllers
+ {
+@@ -13,6 +16,8 @@ namespace Zayna.API.Controllers
+     [Route("api/[controller]")]
+     public class BookingController : ControllerBase
+     {
++        private const int MaxNotesLength = 500;
++
+         private readonly IBookingService _bookingService;
+         private readonly IRepository<Service> _serviceRepository;
+         private readonly IRepository<Customer> _customerRepository;
+@@ -22,6 +27,9 @@ namespace Zayna.API.Controllers
+         private readonly IPaymentService _paymentService;
+         private readonly INotificationService _notificationService;
+         private readonly ILoyaltyService _loyaltyService;
++        private readonly ISalonClock _clock;
++        private readonly BookingPolicy _policy;
++        private readonly ILogger<BookingController> _logger;
+ 
+         public BookingController(
+             IBookingService bookingService,
+@@ -32,7 +40,10 @@ namespace Zayna.API.Controllers
+             IRepository<Stylist> stylistRepository,
+             IPaymentService paymentService,
+             INotificationService notificationService,
+-            ILoyaltyService loyaltyService)
++            ILoyaltyService loyaltyService,
++            ISalonClock clock,
++            BookingPolicy policy,
++            ILogger<BookingController> logger)
+         {
+             _bookingService = bookingService;
+             _serviceRepository = serviceRepository;
+@@ -43,20 +54,39 @@ namespace Zayna.API.Controllers
+             _paymentService = paymentService;
+             _notificationService = notificationService;
+             _loyaltyService = loyaltyService;
++            _clock = clock;
++            _policy = policy;
++            _logger = logger;
+         }
+ 
++        // =====================================================================
++        // AVAILABILITY
++        // =====================================================================
++
++        /// <summary>Free start times (salon local time, "HH:mm:ss") for a stylist + service on a date (yyyy-MM-dd).</summary>
+         [HttpGet("available-slots")]
+         public async Task<IActionResult> GetAvailableSlots(
+             [FromQuery] Guid stylistId,
+             [FromQuery] Guid serviceId,
+-            [FromQuery] DateTime date)
++            [FromQuery] DateOnly date)
+         {
+-            var slots = await _bookingService.GetAvailableTimeSlotsAsync(stylistId, serviceId, date);
+-            return Ok(new { success = true, slots });
++            var slots = await _bookingService.GetAvailableTimeSlotsAsync(
++                stylistId, serviceId, date.ToDateTime(TimeOnly.MinValue));
++
++            return Ok(new
++            {
++                success = true,
++                slots = slots.Select(s => s.ToString(@"hh\:mm\:ss"))
++            });
+         }
+ 
++        // =====================================================================
++        // CREATE
++        // =====================================================================
++
+         /// <summary>
+-        /// Create a booking for the authenticated customer. CustomerId from the body is never trusted.
++        /// Create a booking for the authenticated customer. The customer, price and end time are always
++        /// derived on the server; nothing price- or identity-related is trusted from the request.
+         /// </summary>
+         [Authorize(Roles = "Customer")]
+         [HttpPost]
+@@ -67,49 +97,37 @@ namespace Zayna.API.Controllers
+ 
+             var customer = await _customerRepository.FirstOrDefaultAsync(c => c.UserId == userId);
+             if (customer == null)
+-            {
+-                return BadRequest(new
+-                {
+-                    success = false,
+-                    message = "Customer profile not found for the authenticated user."
+-                });
+-            }
++                return BadRequest(new { success = false, code = "NO_CUSTOMER_PROFILE", message = "Customer profile not found for the authenticated user." });
++
++            var paymentType = request.PaymentType ?? PaymentType.InPerson;
++            if (!Enum.IsDefined(typeof(PaymentType), paymentType))
++                return BadRequest(new { success = false, code = "INVALID_PAYMENT_TYPE", message = "Invalid payment type." });
++            if (paymentType == PaymentType.Online && !_policy.OnlinePaymentEnabled)
++                return BadRequest(new { success = false, code = "ONLINE_PAYMENT_UNAVAILABLE", message = "Online payment is not available yet. Please choose to pay at the salon." });
++
++            var notes = request.Notes?.Trim();
++            if (notes is { Length: > MaxNotesLength })
++                return BadRequest(new { success = false, code = "NOTES_TOO_LONG", message = $"Notes must be at most {MaxNotesLength} characters." });
++
++            if (!await _salonRepository.ExistsAsync(s => s.Id == request.SalonId && s.IsVerified))
++                return BadRequest(new { success = false, code = "SALON_UNAVAILABLE", message = "This salon is not available for booking." });
+ 
+             var service = await _serviceRepository.GetByIdAsync(request.ServiceId);
+             if (service == null || !service.IsActive || service.SalonId != request.SalonId)
+-                return BadRequest(new { success = false, message = "Invalid or unavailable service for this salon." });
++                return BadRequest(new { success = false, code = "INVALID_SERVICE", message = "Invalid or unavailable service for this salon." });
+ 
+             var branch = await _branchRepository.GetByIdAsync(request.BranchId);
+             if (branch == null || !branch.IsActive || branch.SalonId != request.SalonId)
+-                return BadRequest(new { success = false, message = "Invalid or unavailable branch for this salon." });
++                return BadRequest(new { success = false, code = "INVALID_BRANCH", message = "Invalid or unavailable branch for this salon." });
+ 
+             var stylist = await _stylistRepository.GetByIdAsync(request.StylistId);
+-            if (stylist == null ||
+-                !stylist.IsActive ||
+-                stylist.SalonId != request.SalonId ||
+-                (stylist.BranchId.HasValue && stylist.BranchId.Value != request.BranchId))
+-            {
+-                return BadRequest(new { success = false, message = "Invalid or unavailable stylist for this salon and branch." });
+-            }
++            if (stylist == null || !stylist.IsActive || stylist.SalonId != request.SalonId || stylist.BranchId != request.BranchId)
++                return BadRequest(new { success = false, code = "INVALID_STYLIST", message = "Invalid or unavailable stylist for this salon and branch." });
+ 
+-            if (request.BookingDate.Date < DateTime.UtcNow.Date ||
++            if (service.DurationMinutes <= 0 ||
+                 request.StartTime < TimeSpan.Zero ||
+-                request.StartTime >= TimeSpan.FromDays(1) ||
+-                service.DurationMinutes <= 0 ||
+                 request.StartTime.Add(TimeSpan.FromMinutes(service.DurationMinutes)) > TimeSpan.FromDays(1))
+-            {
+-                return BadRequest(new { success = false, message = "Invalid booking date, time, or service duration." });
+-            }
+-
+-            var availableSlots = await _bookingService.GetAvailableTimeSlotsAsync(
+-                request.StylistId, request.ServiceId, request.BookingDate);
+-            if (!availableSlots.Contains(request.StartTime))
+-            {
+-                return Conflict(new { success = false, message = "The selected time slot is unavailable. Please choose another time." });
+-            }
+-
+-            if (!Enum.IsDefined(typeof(PaymentType), request.PaymentType))
+-                return BadRequest(new { success = false, message = "Invalid payment type." });
++                return BadRequest(new { success = false, code = "INVALID_TIME", message = "Invalid booking time or service duration." });
+ 
+             var booking = new Booking
+             {
+@@ -118,50 +136,57 @@ namespace Zayna.API.Controllers
+                 BranchId = request.BranchId,
+                 StylistId = request.StylistId,
+                 ServiceId = request.ServiceId,
+-                BookingDate = request.BookingDate,
++                BookingDate = request.BookingDate.ToDateTime(TimeOnly.MinValue),
+                 StartTime = request.StartTime,
+                 EndTime = request.StartTime.Add(TimeSpan.FromMinutes(service.DurationMinutes)),
+                 TotalAmount = service.Price,
+-                PaymentType = request.PaymentType,
+-                Notes = request.Notes
++                PaymentType = paymentType,
++                Notes = string.IsNullOrWhiteSpace(notes) ? null : notes
+             };
+ 
+-            var createdBooking = await _bookingService.CreateBookingAsync(booking);
++            // Atomic: re-checks availability under a per-stylist lock. Throws a 409 AppException if the slot was taken
++            // (also covers dates in the past / too far ahead, closed days, off days and non-working hours).
++            await _bookingService.CreateBookingAsync(booking);
+ 
+-            if (request.PaymentType == PaymentType.Online)
++            var created = await _bookingService.GetBookingByIdAsync(booking.Id) ?? booking;
++
++            if (paymentType == PaymentType.Online)
+             {
+-                var (success, transactionId, checkoutUrl) = await _paymentService.CreatePaymentAsync(createdBooking);
++                var (success, transactionId, checkoutUrl) = await _paymentService.CreatePaymentAsync(created);
+                 if (success)
+                 {
+-                    return Ok(new
+-                    {
+-                        success = true,
+-                        booking = createdBooking,
+-                        checkoutUrl,
+-                        transactionId
+-                    });
++                    return Ok(new { success = true, booking = ToDto(created, forCustomer: true, includeCustomer: false), checkoutUrl, transactionId });
+                 }
+ 
+-                await _bookingService.CancelBookingAsync(
+-                    createdBooking.Id,
+-                    "Online payment initialization failed.");
+-
++                await _bookingService.CancelBookingAsync(created.Id, "Online payment initialization failed.");
+                 return StatusCode(StatusCodes.Status502BadGateway, new
+                 {
+                     success = false,
++                    code = "PAYMENT_INIT_FAILED",
+                     message = "Unable to initialize online payment. Please try booking again."
+                 });
+             }
+ 
+-            await _notificationService.SendBookingConfirmationAsync(createdBooking);
+-            await _loyaltyService.AddPointsAsync(
+-                customer.Id,
+-                10,
+-                $"Booking #{createdBooking.BookingNumber}");
++            // Notifications are best-effort: the booking already exists and must never be reported as failed.
++            if (created.Status == BookingStatus.Confirmed)
++            {
++                try
++                {
++                    await _notificationService.SendBookingConfirmationAsync(created);
++                }
++                catch (Exception ex)
++                {
++                    _logger.LogWarning(ex, "Booking confirmation notification failed for booking {BookingId}", created.Id);
++                }
++            }
+ 
+-            return Ok(new { success = true, booking = createdBooking });
++            return Ok(new { success = true, booking = ToDto(created, forCustomer: true, includeCustomer: false) });
+         }
+ 
++        // =====================================================================
++        // READ
++        // =====================================================================
++
+         [Authorize(Roles = "Customer")]
+         [HttpGet("my-bookings")]
+         public async Task<IActionResult> GetMyBookings()
+@@ -171,15 +196,32 @@ namespace Zayna.API.Controllers
+ 
+             var customer = await _customerRepository.FirstOrDefaultAsync(c => c.UserId == userId);
+             if (customer == null)
+-                return Ok(new { success = true, bookings = Array.Empty<Booking>() });
++                return Ok(new { success = true, bookings = Array.Empty<BookingResponseDto>() });
+ 
+             var bookings = await _bookingService.GetCustomerBookingsAsync(customer.Id);
+-            return Ok(new { success = true, bookings });
++            return Ok(new
++            {
++                success = true,
++                bookings = bookings.Select(b => ToDto(b, forCustomer: true, includeCustomer: false)).ToList()
++            });
++        }
++
++        /// <summary>A single booking. Visible to its customer, the owning salon (or its stylist) and admins.</summary>
++        [HttpGet("{id:guid}")]
++        public async Task<IActionResult> GetBooking(Guid id)
++        {
++            var booking = await _bookingService.GetBookingByIdAsync(id);
++            // Same response for "missing" and "not yours": do not reveal which booking ids exist.
++            if (booking == null || !await CanManageBookingAsync(booking))
++                return NotFound(new { success = false, code = "BOOKING_NOT_FOUND", message = "Booking not found." });
++
++            var forCustomer = User.IsInRole("Customer");
++            return Ok(new { success = true, booking = ToDto(booking, forCustomer, includeCustomer: !forCustomer) });
+         }
+ 
+         [Authorize(Roles = "Salon,Admin")]
+-        [HttpGet("salon/{salonId}")]
+-        public async Task<IActionResult> GetSalonBookings(Guid salonId, [FromQuery] DateTime? date)
++        [HttpGet("salon/{salonId:guid}")]
++        public async Task<IActionResult> GetSalonBookings(Guid salonId, [FromQuery] DateOnly? date)
+         {
+             if (!User.IsInRole("Admin"))
+             {
+@@ -195,48 +237,134 @@ namespace Zayna.API.Controllers
+                 return NotFound(new { success = false, message = "Salon not found." });
+             }
+ 
+-            var bookings = await _bookingService.GetSalonBookingsAsync(salonId, date);
+-            return Ok(new { success = true, bookings });
++            var bookings = await _bookingService.GetSalonBookingsAsync(salonId, date?.ToDateTime(TimeOnly.MinValue));
++            return Ok(new
++            {
++                success = true,
++                bookings = bookings.Select(b => ToDto(b, forCustomer: false, includeCustomer: true)).ToList()
++            });
+         }
+ 
+-        [HttpPost("{id}/cancel")]
+-        public async Task<IActionResult> CancelBooking(Guid id, [FromBody] CancelBookingRequest request)
++        // =====================================================================
++        // CANCEL / STATUS
++        // =====================================================================
++
++        [HttpPost("{id:guid}/cancel")]
++        public async Task<IActionResult> CancelBooking(Guid id, [FromBody] CancelBookingRequest? request)
+         {
+             var booking = await _bookingService.GetBookingByIdAsync(id);
+-            if (booking == null)
+-                return NotFound(new { success = false, message = "Booking not found" });
+-
+-            if (!await CanManageBookingAsync(booking))
+-                return Forbid();
++            if (booking == null || !await CanManageBookingAsync(booking))
++                return NotFound(new { success = false, code = "BOOKING_NOT_FOUND", message = "Booking not found." });
+ 
+-            var result = await _bookingService.CancelBookingAsync(id, request.Reason);
++            // Customers are bound by the cancellation notice period; salon staff and admins are not.
++            var isCustomer = User.IsInRole("Customer");
++            var result = await _bookingService.CancelBookingAsync(id, request?.Reason, applyCustomerCutoff: isCustomer);
+             if (!result)
+-                return NotFound(new { success = false, message = "Booking not found" });
++                return NotFound(new { success = false, code = "BOOKING_NOT_FOUND", message = "Booking not found." });
+ 
+             return Ok(new { success = true, message = "Booking cancelled successfully" });
+         }
+ 
+         [Authorize(Roles = "Salon,Stylist,Admin")]
+-        [HttpPut("{id}/status")]
++        [HttpPut("{id:guid}/status")]
+         public async Task<IActionResult> UpdateBookingStatus(Guid id, [FromBody] UpdateBookingStatusRequest request)
+         {
+             if (!Enum.IsDefined(typeof(BookingStatus), request.Status))
+                 return BadRequest(new { success = false, message = "Invalid booking status." });
+ 
+             var booking = await _bookingService.GetBookingByIdAsync(id);
+-            if (booking == null)
+-                return NotFound(new { success = false, message = "Booking not found" });
++            if (booking == null || !await CanManageBookingAsync(booking, allowCustomer: false))
++                return NotFound(new { success = false, code = "BOOKING_NOT_FOUND", message = "Booking not found." });
+ 
+-            if (!await CanManageBookingAsync(booking, allowCustomer: false))
+-                return Forbid();
++            var customerId = booking.CustomerId;
++            var bookingNumber = booking.BookingNumber;
+ 
+             var result = await _bookingService.UpdateBookingStatusAsync(id, request.Status);
+             if (!result)
+-                return NotFound(new { success = false, message = "Booking not found" });
++                return NotFound(new { success = false, code = "BOOKING_NOT_FOUND", message = "Booking not found." });
++
++            // Loyalty points are earned for completed appointments only (not for bookings that may be cancelled).
++            if (request.Status == BookingStatus.Completed)
++            {
++                try
++                {
++                    await _loyaltyService.AddPointsAsync(customerId, 10, $"Booking #{bookingNumber}");
++                }
++                catch (Exception ex)
++                {
++                    _logger.LogWarning(ex, "Awarding loyalty points failed for booking {BookingId}", id);
++                }
++            }
+ 
+             return Ok(new { success = true, message = "Booking status updated" });
+         }
+ 
++        // =====================================================================
++        // HELPERS
++        // =====================================================================
++
++        private BookingResponseDto ToDto(Booking b, bool forCustomer, bool includeCustomer)
++        {
++            var start = b.BookingDate.Date + b.StartTime;
++            var cancellableStatus = b.Status == BookingStatus.Pending || b.Status == BookingStatus.Confirmed;
++            var enoughNotice = start - _clock.LocalNow >= TimeSpan.FromHours(_policy.CancellationCutoffHours);
++
++            return new BookingResponseDto
++            {
++                Id = b.Id,
++                BookingNumber = b.BookingNumber,
++                Status = (int)b.Status,
++                PaymentType = (int)b.PaymentType,
++                TotalAmount = b.TotalPrice,
++                Notes = b.Notes,
++                BookingDate = b.BookingDate.ToString("yyyy-MM-dd"),
++                StartTime = b.StartTime.ToString(@"hh\:mm"),
++                EndTime = b.EndTime.ToString(@"hh\:mm"),
++                CreatedAt = b.CreatedAt,
++                CancelledAt = b.CancelledAt,
++                CancellationReason = b.CancellationReason,
++                CanCancel = cancellableStatus && (!forCustomer || enoughNotice),
++                Salon = new BookingSalonInfo
++                {
++                    Id = b.SalonId,
++                    Name = b.Salon?.SalonName ?? "",
++                    NameAr = b.Salon?.SalonNameAr,
++                    Phone = b.Salon?.ContactPhone
++                },
++                Branch = new BookingBranchInfo
++                {
++                    Id = b.BranchId,
++                    Name = b.Branch?.BranchName ?? "",
++                    NameAr = b.Branch?.BranchNameAr,
++                    Address = b.Branch?.AddressLine,
++                    City = b.Branch?.City
++                },
++                Stylist = new BookingStylistInfo
++                {
++                    Id = b.StylistId,
++                    Name = b.Stylist?.FullName ?? "",
++                    NameAr = b.Stylist?.FullNameAr
++                },
++                Service = new BookingServiceInfo
++                {
++                    Id = b.ServiceId,
++                    Name = b.Service?.ServiceName ?? "",
++                    NameAr = b.Service?.ServiceNameAr,
++                    DurationMinutes = b.Service?.DurationMinutes ?? 0,
++                    Price = b.TotalPrice
++                },
++                Customer = includeCustomer && b.Customer != null
++                    ? new BookingCustomerInfo
++                    {
++                        Id = b.CustomerId,
++                        Name = b.Customer.FullName,
++                        Phone = b.Customer.User?.PhoneNumber,
++                        Email = b.Customer.User?.Email
++                    }
++                    : null
++            };
++        }
++
+         private bool TryGetCurrentUserId(out Guid userId)
+         {
+             var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+@@ -279,18 +407,20 @@ namespace Zayna.API.Controllers
+         }
+     }
+ 
+-    // CustomerId remains for backward compatibility but is ignored by the API.
++    /// <summary>
++    /// BookingDate is a calendar date ("yyyy-MM-dd", salon local date) and StartTime a local time ("HH:mm:ss"),
++    /// so no time-zone conversion can shift the appointment to another day. CustomerId / price are never accepted.
++    /// </summary>
+     public record CreateBookingRequest(
+-        Guid CustomerId,
+         Guid SalonId,
+         Guid BranchId,
+         Guid StylistId,
+         Guid ServiceId,
+-        DateTime BookingDate,
++        DateOnly BookingDate,
+         TimeSpan StartTime,
+-        PaymentType PaymentType,
+-        string Notes);
++        PaymentType? PaymentType,
++        string? Notes);
+ 
+-    public record CancelBookingRequest(string Reason);
++    public record CancelBookingRequest(string? Reason);
+     public record UpdateBookingStatusRequest(BookingStatus Status);
+ }
+diff --git a/backend/ZAYNA.API/Controllers/CatalogController.cs b/backend/ZAYNA.API/Controllers/CatalogController.cs
+new file mode 100644
+index 0000000..921c7eb
+--- /dev/null
++++ b/backend/ZAYNA.API/Controllers/CatalogController.cs
+@@ -0,0 +1,142 @@
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Mvc;
++using Microsoft.EntityFrameworkCore;
++using ZAYNA.Infrastructure.Data;
++using ZAYNA.Infrastructure.Services;
++
++namespace Zayna.API.Controllers
++{
++    /// <summary>
++    /// Public read-only catalog for the booking flow: which salons can be booked online and what they offer.
++    /// Only approved (verified) salons that have at least one active stylist able to perform an active service
++    /// are listed, so a customer can never start a booking that cannot be completed.
++    /// </summary>
++    [AllowAnonymous]
++    [ApiController]
++    [Route("api/catalog")]
++    public class CatalogController : ControllerBase
++    {
++        private readonly ApplicationDbContext _context;
++        private readonly BookingPolicy _policy;
++
++        public CatalogController(ApplicationDbContext context, BookingPolicy policy)
++        {
++            _context = context;
++            _policy = policy;
++        }
++
++        /// <summary>Salons that can be booked online right now.</summary>
++        [HttpGet("salons")]
++        public async Task<IActionResult> GetBookableSalons([FromQuery] string? search)
++        {
++            var query = _context.Salons.AsNoTracking()
++                .Where(s => s.IsVerified &&
++                            s.Stylists.Any(st => st.IsActive &&
++                                                 st.BranchId != null &&
++                                                 st.StylistServices.Any(ss => ss.Service.IsActive)));
++
++            if (!string.IsNullOrWhiteSpace(search))
++            {
++                var term = search.Trim();
++                query = query.Where(s =>
++                    (s.SalonName != null && s.SalonName.Contains(term)) ||
++                    (s.SalonNameAr != null && s.SalonNameAr.Contains(term)));
++            }
++
++            var salons = await query
++                .OrderBy(s => s.SalonName)
++                .Take(100)
++                .Select(s => new
++                {
++                    s.Id,
++                    Name = s.SalonName,
++                    NameAr = s.SalonNameAr,
++                    Description = s.AboutText,
++                    City = s.Branches.Where(b => b.IsActive).Select(b => b.City).FirstOrDefault(),
++                    Address = s.Branches.Where(b => b.IsActive).Select(b => b.AddressLine).FirstOrDefault(),
++                    ServicesCount = s.Services.Count(sv => sv.IsActive),
++                    FromPrice = s.Services.Where(sv => sv.IsActive).Min(sv => (decimal?)sv.Price)
++                })
++                .ToListAsync();
++
++            return Ok(new { success = true, currency = "OMR", salons });
++        }
++
++        /// <summary>
++        /// Everything the booking flow needs for one salon: active branches, services and stylists
++        /// (with the services each stylist performs), plus the booking rules in force.
++        /// </summary>
++        [HttpGet("salons/{id:guid}/booking-options")]
++        public async Task<IActionResult> GetBookingOptions(Guid id)
++        {
++            var salon = await _context.Salons.AsNoTracking()
++                .Where(s => s.Id == id && s.IsVerified)
++                .Select(s => new { s.Id, Name = s.SalonName, NameAr = s.SalonNameAr, Phone = s.ContactPhone })
++                .FirstOrDefaultAsync();
++
++            if (salon == null)
++                return NotFound(new { success = false, code = "SALON_NOT_FOUND", message = "Salon not found." });
++
++            var stylistRows = await _context.Stylists.AsNoTracking()
++                .Where(st => st.SalonId == id && st.IsActive && st.BranchId != null)
++                .Select(st => new
++                {
++                    st.Id,
++                    Name = st.FullName,
++                    NameAr = st.FullNameAr,
++                    st.BranchId,
++                    st.YearsOfExperience,
++                    ServiceIds = st.StylistServices
++                        .Where(ss => ss.Service.IsActive)
++                        .Select(ss => ss.ServiceId)
++                        .ToList()
++                })
++                .ToListAsync();
++
++            // A stylist who performs no active service cannot be booked.
++            var stylists = stylistRows.Where(x => x.ServiceIds.Count > 0).ToList();
++
++            var serviceIds = stylists.SelectMany(x => x.ServiceIds).Distinct().ToList();
++            var branchIds = stylists.Select(x => x.BranchId!.Value).Distinct().ToList();
++
++            var branches = await _context.Branches.AsNoTracking()
++                .Where(b => b.SalonId == id && b.IsActive && branchIds.Contains(b.Id))
++                .OrderBy(b => b.BranchName)
++                .Select(b => new { b.Id, Name = b.BranchName, NameAr = b.BranchNameAr, Address = b.AddressLine, b.City })
++                .ToListAsync();
++
++            var services = await _context.Services.AsNoTracking()
++                .Where(s => s.SalonId == id && s.IsActive && serviceIds.Contains(s.Id))
++                .OrderBy(s => s.Category).ThenBy(s => s.ServiceName)
++                .Select(s => new
++                {
++                    s.Id,
++                    Name = s.ServiceName,
++                    NameAr = s.ServiceNameAr,
++                    s.Description,
++                    s.Category,
++                    s.DurationMinutes,
++                    s.Price
++                })
++                .ToListAsync();
++
++            return Ok(new
++            {
++                success = true,
++                salon,
++                branches,
++                services,
++                stylists,
++                policy = new
++                {
++                    currency = "OMR",
++                    maxDaysAhead = _policy.MaxDaysAhead,
++                    minLeadMinutes = _policy.MinLeadMinutes,
++                    cancellationCutoffHours = _policy.CancellationCutoffHours,
++                    autoConfirm = _policy.AutoConfirm,
++                    onlinePaymentEnabled = _policy.OnlinePaymentEnabled
++                }
++            });
++        }
++    }
++}
+diff --git a/backend/ZAYNA.API/Middlewares/GlobalExceptionMiddleware.cs b/backend/ZAYNA.API/Middlewares/GlobalExceptionMiddleware.cs
+index c25ffe7..4e68aa6 100644
+--- a/backend/ZAYNA.API/Middlewares/GlobalExceptionMiddleware.cs
++++ b/backend/ZAYNA.API/Middlewares/GlobalExceptionMiddleware.cs
+@@ -24,7 +24,7 @@ namespace ZAYNA.API.Middlewares
+                 _logger.LogWarning("Application error {ErrorCode} for {Method} {Path}. TraceId: {TraceId}", ex.Code, context.Request.Method, context.Request.Path, context.TraceIdentifier);
+                 if (context.Response.HasStarted) throw;
+                 context.Response.Clear();
+-                context.Response.StatusCode = StatusCodes.Status400BadRequest;
++                context.Response.StatusCode = ex.StatusCode;
+                 context.Response.ContentType = "application/json";
+                 await context.Response.WriteAsJsonAsync(new { success = false, code = ex.Code, message = ex.Message, traceId = context.TraceIdentifier });
+             }
+diff --git a/backend/ZAYNA.API/Program.cs b/backend/ZAYNA.API/Program.cs
+index 09253f9..2c56b63 100644
+--- a/backend/ZAYNA.API/Program.cs
++++ b/backend/ZAYNA.API/Program.cs
+@@ -190,6 +190,10 @@ builder.Services.AddCors(options =>
+ 
+ builder.Services.AddMemoryCache();
+ 
++// Booking: salon-local clock (booking dates/times are local wall-clock values) and the configurable rules.
++builder.Services.AddSingleton<ISalonClock, SalonClock>();
++builder.Services.AddSingleton<BookingPolicy>();
++
+ // Brute-force protection for credential endpoints (per client IP). Behind a reverse proxy the proxy's
+ // forwarded client IP must be trusted (forwarded headers) for this to see real client addresses.
+ builder.Services.AddRateLimiter(options =>
+diff --git a/backend/ZAYNA.API/appsettings.json b/backend/ZAYNA.API/appsettings.json
+index a474e2f..b513497 100644
+--- a/backend/ZAYNA.API/appsettings.json
++++ b/backend/ZAYNA.API/appsettings.json
+@@ -16,6 +16,17 @@
+     "Audience": "ZAYNA.Client",
+     "ExpiryHours": 24
+   },
++  "Booking": {
++    "TimeZone": "Asia/Muscat",
++    "MinLeadMinutes": 30,
++    "MaxDaysAhead": 60,
++    "CancellationCutoffHours": 2,
++    "SlotIntervalMinutes": 30,
++    "AutoConfirm": true
++  },
++  "Payments": {
++    "OnlineEnabled": false
++  },
+   "GoogleSettings": {
+     "ClientId": ""
+   },
+diff --git a/backend/ZAYNA.Core/DTOs/BookingDtos.cs b/backend/ZAYNA.Core/DTOs/BookingDtos.cs
+index 47797ee..992f61c 100644
+--- a/backend/ZAYNA.Core/DTOs/BookingDtos.cs
++++ b/backend/ZAYNA.Core/DTOs/BookingDtos.cs
+@@ -33,6 +33,35 @@ namespace Zayna.Core.DTOs
+         public PaymentDto Payment { get; set; }
+     }
+ 
++    // ---- API response shapes (camelCase JSON). Enums are sent as numbers. ----
++    public class BookingResponseDto
++    {
++        public Guid Id { get; set; }
++        public string? BookingNumber { get; set; }
++        public int Status { get; set; }                 // BookingStatus
++        public int PaymentType { get; set; }            // PaymentType: 0 online, 1 in person
++        public decimal TotalAmount { get; set; }
++        public string? Notes { get; set; }
++        public string BookingDate { get; set; } = "";   // yyyy-MM-dd (salon local date)
++        public string StartTime { get; set; } = "";     // HH:mm (salon local time)
++        public string EndTime { get; set; } = "";
++        public DateTime CreatedAt { get; set; }
++        public DateTime? CancelledAt { get; set; }
++        public string? CancellationReason { get; set; }
++        public bool CanCancel { get; set; }
++        public BookingSalonInfo Salon { get; set; } = new();
++        public BookingBranchInfo Branch { get; set; } = new();
++        public BookingStylistInfo Stylist { get; set; } = new();
++        public BookingServiceInfo Service { get; set; } = new();
++        public BookingCustomerInfo? Customer { get; set; } // only for salon/admin views
++    }
++
++    public class BookingSalonInfo { public Guid Id { get; set; } public string Name { get; set; } = ""; public string? NameAr { get; set; } public string? Phone { get; set; } }
++    public class BookingBranchInfo { public Guid Id { get; set; } public string Name { get; set; } = ""; public string? NameAr { get; set; } public string? Address { get; set; } public string? City { get; set; } }
++    public class BookingStylistInfo { public Guid Id { get; set; } public string Name { get; set; } = ""; public string? NameAr { get; set; } }
++    public class BookingServiceInfo { public Guid Id { get; set; } public string Name { get; set; } = ""; public string? NameAr { get; set; } public int DurationMinutes { get; set; } public decimal Price { get; set; } }
++    public class BookingCustomerInfo { public Guid Id { get; set; } public string Name { get; set; } = ""; public string? Phone { get; set; } public string? Email { get; set; } }
++
+     public class AvailableSlotDto
+     {
+         public TimeSpan StartTime { get; set; }
+diff --git a/backend/ZAYNA.Core/Exceptions/AppException.cs b/backend/ZAYNA.Core/Exceptions/AppException.cs
+index cd6f2d2..accd75b 100644
+--- a/backend/ZAYNA.Core/Exceptions/AppException.cs
++++ b/backend/ZAYNA.Core/Exceptions/AppException.cs
+@@ -3,10 +3,12 @@
+     public class AppException : Exception
+     {
+         public string Code { get; }
++        public int StatusCode { get; }
+ 
+-        public AppException(string code, string message) : base(message)
++        public AppException(string code, string message, int statusCode = 400) : base(message)
+         {
+             Code = code;
++            StatusCode = statusCode;
+         }
+     }
+ }
+diff --git a/backend/ZAYNA.Core/Interfaces/IBookingService.cs b/backend/ZAYNA.Core/Interfaces/IBookingService.cs
+index ea5529d..128bc6e 100644
+--- a/backend/ZAYNA.Core/Interfaces/IBookingService.cs
++++ b/backend/ZAYNA.Core/Interfaces/IBookingService.cs
+@@ -1,17 +1,30 @@
+-    using ZAYNA.Core.Entities;
+-    using ZAYNA.Core.Enums;
++using ZAYNA.Core.Entities;
++using ZAYNA.Core.Enums;
+ 
+-    namespace ZAYNA.Core.Interfaces
++namespace ZAYNA.Core.Interfaces
++{
++    public interface IBookingService
+     {
++        /// <summary>
++        /// Creates a booking atomically. Throws AppException(SLOT_UNAVAILABLE, 409) if the slot is no longer free.
++        /// Assigns the booking number and the initial status.
++        /// </summary>
++        Task<Booking> CreateBookingAsync(Booking booking);
+ 
+-        public interface IBookingService
+-        {
+-            Task<Booking> CreateBookingAsync(Booking booking);
+-            Task<Booking?> GetBookingByIdAsync(Guid id);
+-            Task<IEnumerable<Booking>> GetCustomerBookingsAsync(Guid customerId);
+-            Task<IEnumerable<Booking>> GetSalonBookingsAsync(Guid salonId, DateTime? date = null);
+-            Task<bool> CancelBookingAsync(Guid bookingId, string reason);
+-            Task<bool> UpdateBookingStatusAsync(Guid bookingId, BookingStatus status);
+-            Task<IEnumerable<TimeSpan>> GetAvailableTimeSlotsAsync(Guid stylistId, Guid serviceId, DateTime date);
+-        }
+-    }
+\ No newline at end of file
++        /// <summary>Booking with customer, salon, branch, stylist, service and payment loaded.</summary>
++        Task<Booking?> GetBookingByIdAsync(Guid id);
++        Task<IEnumerable<Booking>> GetCustomerBookingsAsync(Guid customerId);
++        Task<IEnumerable<Booking>> GetSalonBookingsAsync(Guid salonId, DateTime? date = null);
++
++        /// <summary>
++        /// Cancels a pending or confirmed booking. With applyCustomerCutoff the configured minimum notice applies.
++        /// Throws AppException (409) when the booking cannot be cancelled. Returns false if not found.
++        /// </summary>
++        Task<bool> CancelBookingAsync(Guid bookingId, string? reason, bool applyCustomerCutoff = false);
++
++        /// <summary>Applies a status change if it is a valid transition. Throws AppException (409) otherwise.</summary>
++        Task<bool> UpdateBookingStatusAsync(Guid bookingId, BookingStatus status);
++
++        Task<IEnumerable<TimeSpan>> GetAvailableTimeSlotsAsync(Guid stylistId, Guid serviceId, DateTime date);
++    }
++}
+diff --git a/backend/ZAYNA.Core/Interfaces/ISalonClock.cs b/backend/ZAYNA.Core/Interfaces/ISalonClock.cs
+new file mode 100644
+index 0000000..3762d99
+--- /dev/null
++++ b/backend/ZAYNA.Core/Interfaces/ISalonClock.cs
+@@ -0,0 +1,12 @@
++namespace Zayna.Core.Interfaces
++{
++    /// <summary>
++    /// The current time in the salons' local time zone (configurable, default Asia/Muscat, UTC+4).
++    /// Booking dates and times are stored as local (wall-clock) values, so every "is this in the past?"
++    /// comparison must use this clock and never DateTime.UtcNow.
++    /// </summary>
++    public interface ISalonClock
++    {
++        DateTime LocalNow { get; }
++    }
++}
+diff --git a/backend/ZAYNA.Infrastructure/Data/ApplicationDbContext.cs b/backend/ZAYNA.Infrastructure/Data/ApplicationDbContext.cs
+index 587210c..98c0239 100644
+--- a/backend/ZAYNA.Infrastructure/Data/ApplicationDbContext.cs
++++ b/backend/ZAYNA.Infrastructure/Data/ApplicationDbContext.cs
+@@ -118,7 +118,7 @@ public class ApplicationDbContext : DbContext
+                 .HasForeignKey(e => e.SalonId)
+                 .OnDelete(DeleteBehavior.Cascade);
+             
+-            entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
++            entity.Property(e => e.Price).HasColumnType("decimal(18,3)"); // OMR has 3 decimal places
+         });
+ 
+         // StylistService (Many-to-Many)
+@@ -167,8 +167,22 @@ public class ApplicationDbContext : DbContext
+                 .HasForeignKey(e => e.ServiceId)
+                 .OnDelete(DeleteBehavior.Restrict);
+             
+-            entity.Property(e => e.TotalPrice).HasColumnType("decimal(18,2)");
++            entity.Property(e => e.TotalPrice).HasColumnType("decimal(18,3)");
+             entity.HasIndex(e => e.BookingDate);
++
++            // TotalAmount is only a convenience wrapper over TotalPrice. Persisting it created a second, 2-decimal
++            // column whose value could overwrite the exact TotalPrice when a booking was read back.
++            entity.Ignore(e => e.TotalAmount);
++
++            // Booking numbers are unique when present (older rows may have none).
++            entity.HasIndex(e => e.BookingNumber).IsUnique();
++
++            // Database-level backstop against double booking: one live booking per stylist, date and start time.
++            // (Status 4 = Cancelled, which frees the slot.) Overlaps of different lengths are prevented by the
++            // per-stylist lock in BookingService; this index guarantees it even if that lock were ever bypassed.
++            entity.HasIndex(e => new { e.StylistId, e.BookingDate, e.StartTime })
++                  .IsUnique()
++                  .HasFilter("[Status] <> 4");
+         });
+ 
+         // Payment
+@@ -180,7 +194,7 @@ public class ApplicationDbContext : DbContext
+                 .HasForeignKey<Payment>(e => e.BookingId)
+                 .OnDelete(DeleteBehavior.Cascade);
+             
+-            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
++            entity.Property(e => e.Amount).HasColumnType("decimal(18,3)");
+         });
+ 
+         // Notification
+diff --git a/backend/ZAYNA.Infrastructure/Data/DbInitializer.cs b/backend/ZAYNA.Infrastructure/Data/DbInitializer.cs
+index f34c979..a43dcb7 100644
+--- a/backend/ZAYNA.Infrastructure/Data/DbInitializer.cs
++++ b/backend/ZAYNA.Infrastructure/Data/DbInitializer.cs
+@@ -20,7 +20,10 @@ namespace ZAYNA.Infrastructure.Data
+             await EnsureAdminAsync(context, adminEmail);
+ 
+             if (seedDemoData)
++            {
+                 await SeedDemoSalonAsync(context);
++                await SeedDemoStaffAsync(context);
++            }
+         }
+ 
+         private static async Task EnsureAdminAsync(ApplicationDbContext context, string? adminEmail)
+@@ -56,6 +59,75 @@ namespace ZAYNA.Infrastructure.Data
+             }
+         }
+ 
++        /// <summary>
++        /// Development only. Gives the demo salon two stylists who perform all its services, so the booking flow can be
++        /// exercised end to end. Safe to run repeatedly (does nothing once the salon has stylists).
++        /// </summary>
++        private static async Task SeedDemoStaffAsync(ApplicationDbContext context)
++        {
++            var salon = await context.Salons.FirstOrDefaultAsync(s => s.ContactEmail == "salon@zayna.om");
++            if (salon == null || await context.Stylists.AnyAsync(s => s.SalonId == salon.Id))
++                return;
++
++            var branch = await context.Branches.Include(b => b.WorkingHours)
++                .FirstOrDefaultAsync(b => b.SalonId == salon.Id && b.IsActive);
++            var services = await context.Services.Where(s => s.SalonId == salon.Id && s.IsActive).ToListAsync();
++            if (branch == null || services.Count == 0)
++                return;
++
++            if (!branch.WorkingHours.Any())
++            {
++                for (int day = 0; day <= 6; day++)
++                {
++                    branch.WorkingHours.Add(new BranchWorkingHours
++                    {
++                        DayOfWeek = (System.DayOfWeek)day,
++                        OpenTime = TimeSpan.FromHours(9),
++                        CloseTime = TimeSpan.FromHours(21),
++                        IsClosed = day == 5 // Friday closed
++                    });
++                }
++            }
++
++            var staff = new[]
++            {
++                (Name: "Ahmed Al-Said", NameAr: "أحمد السعيد", Phone: "+96890000001", Years: 5),
++                (Name: "Mariam Al-Balushi", NameAr: "مريم البلوشي", Phone: "+96890000002", Years: 8)
++            };
++
++            foreach (var member in staff)
++            {
++                var user = new User
++                {
++                    PhoneNumber = member.Phone,
++                    FullName = member.Name,
++                    Role = UserRole.Stylist,
++                    IsActive = true,
++                    IsPhoneVerified = true,
++                    CreatedAt = DateTime.UtcNow,
++                    UpdatedAt = DateTime.UtcNow
++                };
++                context.Users.Add(user);
++
++                var stylist = new Stylist
++                {
++                    User = user,
++                    SalonId = salon.Id,
++                    BranchId = branch.Id,
++                    FullName = member.Name,
++                    FullNameAr = member.NameAr,
++                    YearsOfExperience = member.Years,
++                    IsActive = true
++                };
++                foreach (var service in services)
++                    stylist.StylistServices.Add(new StylistService { Service = service });
++
++                context.Stylists.Add(stylist);
++            }
++
++            await context.SaveChangesAsync();
++        }
++
+         private static async Task SeedDemoSalonAsync(ApplicationDbContext context)
+         {
+             if (await context.Salons.AnyAsync())
+diff --git a/backend/ZAYNA.Infrastructure/Services/BookingPolicy.cs b/backend/ZAYNA.Infrastructure/Services/BookingPolicy.cs
+new file mode 100644
+index 0000000..a871a8c
+--- /dev/null
++++ b/backend/ZAYNA.Infrastructure/Services/BookingPolicy.cs
+@@ -0,0 +1,37 @@
++namespace ZAYNA.Infrastructure.Services
++{
++    /// <summary>
++    /// Booking rules, read once from configuration (section "Booking" / "Payments") with safe defaults.
++    /// </summary>
++    public class BookingPolicy
++    {
++        /// <summary>Earliest bookable start, in minutes from now (today only).</summary>
++        public int MinLeadMinutes { get; }
++        /// <summary>How many days ahead a booking may be made.</summary>
++        public int MaxDaysAhead { get; }
++        /// <summary>Customers may cancel only if the appointment is at least this many hours away.</summary>
++        public int CancellationCutoffHours { get; }
++        /// <summary>Start times are offered on this grid, in minutes.</summary>
++        public int SlotIntervalMinutes { get; }
++        /// <summary>true: new bookings are Confirmed immediately; false: they start as Pending for the salon to confirm.</summary>
++        public bool AutoConfirm { get; }
++        /// <summary>Online payment is off until a payment provider is configured and this is enabled.</summary>
++        public bool OnlinePaymentEnabled { get; }
++
++        public BookingPolicy(IConfiguration configuration)
++        {
++            MinLeadMinutes = Int(configuration["Booking:MinLeadMinutes"], 30, 0, 24 * 60);
++            MaxDaysAhead = Int(configuration["Booking:MaxDaysAhead"], 60, 1, 365);
++            CancellationCutoffHours = Int(configuration["Booking:CancellationCutoffHours"], 2, 0, 24 * 14);
++            SlotIntervalMinutes = Int(configuration["Booking:SlotIntervalMinutes"], 30, 5, 240);
++            AutoConfirm = Bool(configuration["Booking:AutoConfirm"], true);
++            OnlinePaymentEnabled = Bool(configuration["Payments:OnlineEnabled"], false);
++        }
++
++        private static int Int(string? raw, int fallback, int min, int max)
++            => int.TryParse(raw, out var v) ? Math.Clamp(v, min, max) : fallback;
++
++        private static bool Bool(string? raw, bool fallback)
++            => bool.TryParse(raw, out var v) ? v : fallback;
++    }
++}
+diff --git a/backend/ZAYNA.Infrastructure/Services/BookingService.cs b/backend/ZAYNA.Infrastructure/Services/BookingService.cs
+index 93f4849..c0a7513 100644
+--- a/backend/ZAYNA.Infrastructure/Services/BookingService.cs
++++ b/backend/ZAYNA.Infrastructure/Services/BookingService.cs
+@@ -1,46 +1,121 @@
++using Microsoft.Data.SqlClient;
++using Zayna.Core.Exceptions;
++using Zayna.Core.Interfaces;
+ using ZAYNA.Infrastructure.Data;
+ using ZAYNA.Core.Enums;
+ 
+-
+ namespace ZAYNA.Infrastructure.Services
+ {
+     public class BookingService : IBookingService
+     {
++        private const int AppLockFailedNumber = 51000;
++
++        // Valid status changes. Anything not listed (including every change out of a final state) is rejected.
++        private static readonly Dictionary<BookingStatus, BookingStatus[]> AllowedTransitions = new()
++        {
++            [BookingStatus.Pending] = new[] { BookingStatus.Confirmed, BookingStatus.Cancelled },
++            [BookingStatus.Confirmed] = new[] { BookingStatus.InProgress, BookingStatus.Completed, BookingStatus.NoShow, BookingStatus.Cancelled },
++            [BookingStatus.InProgress] = new[] { BookingStatus.Completed },
++        };
++
+         private readonly ApplicationDbContext _context;
+-        private readonly IRepository<Booking> _bookingRepository;
+         private readonly IRepository<StylistOffDay> _offDayRepository;
+-        private readonly IRepository<BranchWorkingHours> _workingHoursRepository;
++        private readonly ISalonClock _clock;
++        private readonly BookingPolicy _policy;
+ 
+         public BookingService(
+             ApplicationDbContext context,
+-            IRepository<Booking> bookingRepository,
+             IRepository<StylistOffDay> offDayRepository,
+-            IRepository<BranchWorkingHours> workingHoursRepository)
++            ISalonClock clock,
++            BookingPolicy policy)
+         {
+             _context = context;
+-            _bookingRepository = bookingRepository;
+             _offDayRepository = offDayRepository;
+-            _workingHoursRepository = workingHoursRepository;
++            _clock = clock;
++            _policy = policy;
+         }
+ 
+-        // -------------------------
+-        // IBookingService Methods
+-        // -------------------------
++        // =====================================================================
++        // CREATE (atomic)
++        // =====================================================================
++        public async Task<Booking> CreateBookingAsync(Booking booking)
++        {
++            var date = booking.BookingDate.Date;
++            booking.BookingDate = date;
++
++            await using var tx = await _context.Database.BeginTransactionAsync();
++
++            // One booking at a time per stylist per day: concurrent requests for the same stylist/day queue
++            // here, so the availability re-check below sees every booking committed before ours.
++            // The lock is transaction-scoped and released automatically on commit/rollback.
++            var resource = $"zayna:booking:{booking.StylistId:N}:{date:yyyyMMdd}";
++            try
++            {
++                await _context.Database.ExecuteSqlInterpolatedAsync($@"
++                    DECLARE @r int;
++                    EXEC @r = sp_getapplock @Resource = {resource}, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
++                    IF @r < 0 THROW 51000, 'Could not acquire the booking lock.', 1;");
++            }
++            catch (SqlException ex) when (ex.Number == AppLockFailedNumber)
++            {
++                throw new AppException("BOOKING_BUSY",
++                    "This stylist is being booked by other customers right now. Please try again in a moment.", 503);
++            }
++
++            var slots = await GetAvailableTimeSlotsAsync(booking.StylistId, booking.ServiceId, date);
++            if (!slots.Contains(booking.StartTime))
++                throw new AppException("SLOT_UNAVAILABLE",
++                    "The selected time is no longer available. Please choose another time.", 409);
+ 
+-        public async Task<Booking> CreateBookingAsync(
+-            Booking booking)
++            var now = DateTime.UtcNow;
++            booking.Status = _policy.AutoConfirm ? BookingStatus.Confirmed : BookingStatus.Pending;
++            booking.BookingNumber = await GenerateBookingNumberAsync();
++            booking.CreatedAt = now;
++            booking.UpdatedAt = now;
++
++            _context.Bookings.Add(booking);
++            try
++            {
++                await _context.SaveChangesAsync();
++            }
++            catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
++            {
++                // Database-level backstop (unique index on stylist + date + start time).
++                throw new AppException("SLOT_UNAVAILABLE",
++                    "The selected time is no longer available. Please choose another time.", 409);
++            }
++
++            await tx.CommitAsync();
++            return booking;
++        }
++
++        private async Task<string> GenerateBookingNumberAsync()
+         {
+-            booking.Status = BookingStatus.Pending;
+-            booking.CreatedAt = DateTime.UtcNow;
+-            booking.UpdatedAt = DateTime.UtcNow;
++            // Unambiguous characters only (no 0/O, 1/I).
++            const string alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
++            var prefix = $"ZN-{_clock.LocalNow:yyMMdd}-";
+ 
++            for (var attempt = 0; attempt < 10; attempt++)
++            {
++                var chars = new char[5];
++                for (var i = 0; i < chars.Length; i++)
++                    chars[i] = alphabet[System.Security.Cryptography.RandomNumberGenerator.GetInt32(alphabet.Length)];
+ 
+-            return await _bookingRepository.AddAsync(booking);
++                var number = prefix + new string(chars);
++                if (!await _context.Bookings.AnyAsync(b => b.BookingNumber == number))
++                    return number;
++            }
++
++            throw new InvalidOperationException("Could not generate a unique booking number.");
+         }
+ 
++        // =====================================================================
++        // READ
++        // =====================================================================
+         public async Task<Booking?> GetBookingByIdAsync(Guid id)
+         {
+             return await _context.Bookings
++                .Include(b => b.Customer).ThenInclude(c => c.User)
+                 .Include(b => b.Salon)
+                 .Include(b => b.Branch)
+                 .Include(b => b.Stylist)
+@@ -52,6 +127,7 @@ namespace ZAYNA.Infrastructure.Services
+         public async Task<IEnumerable<Booking>> GetCustomerBookingsAsync(Guid customerId)
+         {
+             return await _context.Bookings
++                .AsNoTracking()
+                 .Include(b => b.Salon)
+                 .Include(b => b.Branch)
+                 .Include(b => b.Stylist)
+@@ -66,7 +142,9 @@ namespace ZAYNA.Infrastructure.Services
+         public async Task<IEnumerable<Booking>> GetSalonBookingsAsync(Guid salonId, DateTime? date)
+         {
+             var query = _context.Bookings
+-                .Include(b => b.Customer)
++                .AsNoTracking()
++                .Include(b => b.Customer).ThenInclude(c => c.User)
++                .Include(b => b.Salon)
+                 .Include(b => b.Branch)
+                 .Include(b => b.Stylist)
+                 .Include(b => b.Service)
+@@ -74,7 +152,10 @@ namespace ZAYNA.Infrastructure.Services
+                 .Where(b => b.SalonId == salonId);
+ 
+             if (date.HasValue)
+-                query = query.Where(b => b.BookingDate == date.Value.Date);
++            {
++                var day = date.Value.Date;
++                query = query.Where(b => b.BookingDate == day);
++            }
+ 
+             return await query
+                 .OrderByDescending(b => b.BookingDate)
+@@ -82,93 +163,128 @@ namespace ZAYNA.Infrastructure.Services
+                 .ToListAsync();
+         }
+ 
+-        public async Task<bool> CancelBookingAsync(Guid bookingId, string reason)
++        // =====================================================================
++        // CANCEL / STATUS
++        // =====================================================================
++        public async Task<bool> CancelBookingAsync(Guid bookingId, string? reason, bool applyCustomerCutoff = false)
+         {
+-            var booking = await _bookingRepository.GetByIdAsync(bookingId);
++            var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
+             if (booking == null) return false;
+ 
++            if (booking.Status != BookingStatus.Pending && booking.Status != BookingStatus.Confirmed)
++                throw new AppException("BOOKING_NOT_CANCELLABLE",
++                    "Only pending or confirmed bookings can be cancelled.", 409);
++
++            if (applyCustomerCutoff)
++            {
++                var start = booking.BookingDate.Date + booking.StartTime;
++                if (start - _clock.LocalNow < TimeSpan.FromHours(_policy.CancellationCutoffHours))
++                    throw new AppException("CANCELLATION_TOO_LATE",
++                        $"Bookings can only be cancelled at least {_policy.CancellationCutoffHours} hour(s) before the appointment. Please contact the salon.", 409);
++            }
++
++            var cleanReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
++            if (cleanReason is { Length: > 500 }) cleanReason = cleanReason[..500];
++
+             booking.Status = BookingStatus.Cancelled;
+-            booking.CancellationReason = reason;
++            booking.CancellationReason = cleanReason;
+             booking.CancelledAt = DateTime.UtcNow;
+             booking.UpdatedAt = DateTime.UtcNow;
+-
+-            await _bookingRepository.UpdateAsync(booking);
++            await _context.SaveChangesAsync();
+             return true;
+         }
+ 
+         public async Task<bool> UpdateBookingStatusAsync(Guid bookingId, BookingStatus status)
+         {
+-            var booking = await _bookingRepository.GetByIdAsync(bookingId);
++            if (status == BookingStatus.Cancelled)
++                return await CancelBookingAsync(bookingId, "Cancelled by the salon.", applyCustomerCutoff: false);
++
++            var booking = await _context.Bookings.FirstOrDefaultAsync(b => b.Id == bookingId);
+             if (booking == null) return false;
+ 
++            if (!AllowedTransitions.TryGetValue(booking.Status, out var allowed) || !allowed.Contains(status))
++                throw new AppException("INVALID_STATUS_TRANSITION",
++                    $"A {booking.Status} booking cannot be changed to {status}.", 409);
++
++            // The appointment must have started before it can be in progress, completed or a no-show.
++            var start = booking.BookingDate.Date + booking.StartTime;
++            if ((status == BookingStatus.InProgress || status == BookingStatus.Completed || status == BookingStatus.NoShow)
++                && _clock.LocalNow < start)
++                throw new AppException("TOO_EARLY",
++                    "This status can only be set once the appointment time has started.", 409);
++
+             booking.Status = status;
+             booking.UpdatedAt = DateTime.UtcNow;
+-
+-            await _bookingRepository.UpdateAsync(booking);
++            await _context.SaveChangesAsync();
+             return true;
+         }
+ 
++        // =====================================================================
++        // AVAILABILITY
++        // =====================================================================
+         public async Task<IEnumerable<TimeSpan>> GetAvailableTimeSlotsAsync(Guid stylistId, Guid serviceId, DateTime date)
+         {
+-            var availableSlots = new List<TimeSpan>();
++            var slots = new List<TimeSpan>();
+             var requestedDate = date.Date;
++            var localNow = _clock.LocalNow;
++            var today = localNow.Date;
++
++            if (requestedDate < today || requestedDate > today.AddDays(_policy.MaxDaysAhead))
++                return slots;
+ 
+-            var service = await _context.Services
++            var service = await _context.Services.AsNoTracking()
+                 .FirstOrDefaultAsync(s => s.Id == serviceId && s.IsActive);
+             if (service == null || service.DurationMinutes <= 0)
+-                return availableSlots;
++                return slots;
++
++            // Salons that an admin has not approved (or has suspended) cannot take bookings.
++            var salonApproved = await _context.Salons.AnyAsync(s => s.Id == service.SalonId && s.IsVerified);
++            if (!salonApproved)
++                return slots;
+ 
+-            var stylist = await _context.Stylists
++            var stylist = await _context.Stylists.AsNoTracking()
+                 .Include(s => s.Branch)
+                 .ThenInclude(b => b.WorkingHours)
+                 .FirstOrDefaultAsync(s => s.Id == stylistId && s.IsActive);
+-            if (stylist?.Branch == null || stylist.SalonId != service.SalonId)
+-                return availableSlots;
++            if (stylist?.Branch == null || !stylist.Branch.IsActive || stylist.SalonId != service.SalonId)
++                return slots;
+ 
+             var canPerformService = await _context.StylistServices.AnyAsync(ss =>
+                 ss.StylistId == stylistId && ss.ServiceId == serviceId);
+             if (!canPerformService)
+-                return availableSlots;
++                return slots;
+ 
+-            var offDays = await _offDayRepository.FindAsync(o =>
+-                o.StylistId == stylistId &&
+-                o.OffDate.Date == requestedDate);
+-            if (offDays.Any())
+-                return availableSlots;
++            if (await _offDayRepository.ExistsAsync(o => o.StylistId == stylistId && o.OffDate.Date == requestedDate))
++                return slots;
+ 
+-            var workingHours = stylist.Branch.WorkingHours
++            var hours = stylist.Branch.WorkingHours
+                 .FirstOrDefault(w => (int)w.DayOfWeek == (int)requestedDate.DayOfWeek);
+-            if (workingHours == null || workingHours.IsClosed || workingHours.CloseTime <= workingHours.OpenTime)
+-                return availableSlots;
++            if (hours == null || hours.IsClosed || hours.CloseTime <= hours.OpenTime)
++                return slots;
+ 
+-            var duration = TimeSpan.FromMinutes(service.DurationMinutes);
+-            var existingBookings = await _context.Bookings
++            var existing = await _context.Bookings.AsNoTracking()
+                 .Where(b => b.StylistId == stylistId &&
+                             b.BookingDate.Date == requestedDate &&
+                             b.Status != BookingStatus.Cancelled)
+                 .Select(b => new { b.StartTime, b.EndTime })
+                 .ToListAsync();
+ 
+-            var now = DateTime.UtcNow;
+-            var currentTime = workingHours.OpenTime;
+-            var slotInterval = TimeSpan.FromMinutes(30);
++            var duration = TimeSpan.FromMinutes(service.DurationMinutes);
++            var interval = TimeSpan.FromMinutes(_policy.SlotIntervalMinutes);
++            var earliest = requestedDate == today
++                ? localNow.TimeOfDay.Add(TimeSpan.FromMinutes(_policy.MinLeadMinutes))
++                : TimeSpan.Zero;
+ 
+-            while (currentTime.Add(duration) <= workingHours.CloseTime)
++            for (var start = hours.OpenTime; start.Add(duration) <= hours.CloseTime; start = start.Add(interval))
+             {
+-                var proposedEnd = currentTime.Add(duration);
+-                var overlaps = existingBookings.Any(b =>
+-                    currentTime < b.EndTime && proposedEnd > b.StartTime);
+-
+-                var isFutureSlot = requestedDate > now.Date ||
+-                    (requestedDate == now.Date && currentTime > now.TimeOfDay);
+-
+-                if (!overlaps && isFutureSlot)
+-                    availableSlots.Add(currentTime);
++                if (start < earliest) continue;
+ 
+-                currentTime = currentTime.Add(slotInterval);
++                var end = start.Add(duration);
++                var overlaps = existing.Any(b => start < b.EndTime && end > b.StartTime);
++                if (!overlaps) slots.Add(start);
+             }
+ 
+-            return availableSlots;
++            return slots;
+         }
+     }
+ }
+diff --git a/backend/ZAYNA.Infrastructure/Services/NotificationService.cs b/backend/ZAYNA.Infrastructure/Services/NotificationService.cs
+index bfd9cbc..0542c2e 100644
+--- a/backend/ZAYNA.Infrastructure/Services/NotificationService.cs
++++ b/backend/ZAYNA.Infrastructure/Services/NotificationService.cs
+@@ -18,6 +18,15 @@ namespace ZAYNA.Infrastructure.Services
+             _emailService = emailService;
+         }
+ 
++        // SMS is an optional channel: skipped when the customer has no phone number (Google / email sign-ups).
++        // The provider returns false when it is not configured, so a missing provider never breaks a booking.
++        private async Task TrySendSmsAsync(Booking booking, string message)
++        {
++            var phone = booking.Customer?.User?.PhoneNumber;
++            if (string.IsNullOrWhiteSpace(phone)) return;
++            await _smsService.SendAsync(phone, message);
++        }
++
+         public async Task SendBookingConfirmationAsync(Booking booking)
+         {
+             var notification = new Notification
+@@ -33,14 +42,13 @@ namespace ZAYNA.Infrastructure.Services
+             await _notificationRepository.AddAsync(notification);
+ 
+             // Send SMS
+-            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
++            await TrySendSmsAsync(booking, notification.Message);
+ 
+             // Send Email if available
+-            if (!string.IsNullOrEmpty(booking.Customer.User.Email))
++            var customerEmail = booking.Customer?.User?.Email;
++            if (!string.IsNullOrEmpty(customerEmail))
+             {
+-                await _emailService.SendBookingConfirmationAsync(
+-                    booking.Customer.User.Email,
+-                    notification.Message);
++                await _emailService.SendBookingConfirmationAsync(customerEmail, notification.Message);
+             }
+         }
+ 
+@@ -57,7 +65,7 @@ namespace ZAYNA.Infrastructure.Services
+             };
+ 
+             await _notificationRepository.AddAsync(notification);
+-            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
++            await TrySendSmsAsync(booking, notification.Message);
+         }
+ 
+         public async Task SendBookingCancellationAsync(Booking booking)
+@@ -73,7 +81,7 @@ namespace ZAYNA.Infrastructure.Services
+             };
+ 
+             await _notificationRepository.AddAsync(notification);
+-            await _smsService.SendAsync(booking.Customer.User.PhoneNumber, notification.Message);
++            await TrySendSmsAsync(booking, notification.Message);
+         }
+ 
+         public async Task<IEnumerable<Notification>> GetUserNotificationsAsync(Guid userId)
+diff --git a/backend/ZAYNA.Infrastructure/Services/SalonClock.cs b/backend/ZAYNA.Infrastructure/Services/SalonClock.cs
+new file mode 100644
+index 0000000..22ee667
+--- /dev/null
++++ b/backend/ZAYNA.Infrastructure/Services/SalonClock.cs
+@@ -0,0 +1,31 @@
++using Zayna.Core.Interfaces;
++
++namespace ZAYNA.Infrastructure.Services
++{
++    public class SalonClock : ISalonClock
++    {
++        private readonly TimeZoneInfo _zone;
++
++        public SalonClock(IConfiguration configuration)
++        {
++            var id = configuration["Booking:TimeZone"];
++            if (string.IsNullOrWhiteSpace(id)) id = "Asia/Muscat";
++            _zone = Resolve(id);
++        }
++
++        public DateTime LocalNow => TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _zone);
++
++        private static TimeZoneInfo Resolve(string id)
++        {
++            // IANA ids work on Linux/macOS and on Windows with ICU; Windows ids are the fallback.
++            foreach (var candidate in new[] { id, "Asia/Muscat", "Arabian Standard Time" })
++            {
++                try { return TimeZoneInfo.FindSystemTimeZoneById(candidate); }
++                catch (TimeZoneNotFoundException) { }
++                catch (InvalidTimeZoneException) { }
++            }
++            // Oman has no daylight saving: a fixed UTC+4 zone is a correct last resort.
++            return TimeZoneInfo.CreateCustomTimeZone("Oman", TimeSpan.FromHours(4), "Oman", "Oman");
++        }
++    }
++}
+diff --git a/frontend/src/components/auth/Login.jsx b/frontend/src/components/auth/Login.jsx
+index aaa69f7..33d5a60 100644
+--- a/frontend/src/components/auth/Login.jsx
++++ b/frontend/src/components/auth/Login.jsx
+@@ -2,7 +2,7 @@
+ // src/components/auth/Login.jsx
+ // ============================================
+ import React from 'react';
+-import { useNavigate, Link } from 'react-router-dom';
++import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
+ import { useTranslation } from 'react-i18next';
+ import Logo from '@/assets/img/logo.png';
+ import GoogleSignIn from './GoogleSignIn';
+@@ -20,9 +20,27 @@ export const homeForRole = (role) => {
+   }
+ };
+ 
++// Only same-site paths are accepted as a post-login destination (no open redirects).
++const safePath = (value) => {
++  if (typeof value !== 'string') return null;
++  let v = value.trim();
++  if (!v) return null;
++  if (!v.startsWith('/')) v = `/${v}`;
++  if (v.startsWith('//') || v.includes('\\') || /^\/[a-z][a-z0-9+.-]*:/i.test(v)) return null;
++  return v;
++};
++
+ const Login = () => {
+   const { t } = useTranslation();
+   const navigate = useNavigate();
++  const location = useLocation();
++  const [searchParams] = useSearchParams();
++  const destination = safePath(location.state?.from) || safePath(searchParams.get('redirect'));
++
++  const afterLogin = (res) => {
++    const target = res.role === ROLES.CUSTOMER && destination ? destination : homeForRole(res.role);
++    navigate(target, { replace: true });
++  };
+ 
+   return (
+     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
+@@ -38,7 +56,7 @@ const Login = () => {
+           {t('auth.googleHint', 'Sign in with your Google account to book appointments or manage your salon.')}
+         </p>
+ 
+-        <GoogleSignIn onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
++        <GoogleSignIn onSuccess={afterLogin} />
+ 
+         <div className="flex items-center my-5">
+           <div className="flex-1 border-t" />
+@@ -46,7 +64,7 @@ const Login = () => {
+           <div className="flex-1 border-t" />
+         </div>
+ 
+-        <EmailAuthForm forcedMode="login" onSuccess={(res) => navigate(homeForRole(res.role), { replace: true })} />
++        <EmailAuthForm forcedMode="login" onSuccess={afterLogin} />
+ 
+         <p className="text-center text-sm text-gray-600 mt-6">
+           {t('auth.newHere', 'New to Zayna?')}{' '}
+diff --git a/frontend/src/components/customer/BookingDetails.jsx b/frontend/src/components/customer/BookingDetails.jsx
+index a39a968..98aacb4 100644
+--- a/frontend/src/components/customer/BookingDetails.jsx
++++ b/frontend/src/components/customer/BookingDetails.jsx
+@@ -1,305 +1,200 @@
+ // ============================================
+ // src/components/customer/BookingDetails.jsx
+ // ============================================
+-import React, { useState, useEffect } from 'react';
+-import { useParams, useNavigate } from 'react-router-dom';
++import React, { useCallback, useEffect, useState } from 'react';
++import { Link, useLocation, useParams } from 'react-router-dom';
+ import { useTranslation } from 'react-i18next';
+-import { bookingService } from '../../services/bookingService';
+-import { format } from 'date-fns';
+ import { toast } from 'react-toastify';
++import { FiCalendar, FiClock, FiMapPin, FiPhone, FiUser, FiScissors, FiCheckCircle } from 'react-icons/fi';
+ import Layout from '../common/Layout';
+-import { FiCalendar, FiClock, FiMapPin, FiUser, FiDollarSign, FiX } from 'react-icons/fi';
++import { bookingService } from '../../services/bookingService';
++import { BOOKING_STATUS, formatBookingDate, formatMoney, localized } from '../../utils/bookingFormat';
+ 
+ const BookingDetails = () => {
+-  const { t } = useTranslation();
+   const { id } = useParams();
+-  const navigate = useNavigate();
++  const { t, i18n } = useTranslation();
++  const lang = i18n.language;
++  const location = useLocation();
++  const justBooked = Boolean(location.state?.justBooked);
++
+   const [booking, setBooking] = useState(null);
+   const [loading, setLoading] = useState(true);
+-  const [cancelModal, setCancelModal] = useState(false);
+-  const [cancelReason, setCancelReason] = useState('');
+-  const [cancelling, setCancelling] = useState(false);
++  const [notFound, setNotFound] = useState(false);
++  const [error, setError] = useState(false);
+ 
+-  useEffect(() => {
+-    fetchBooking();
+-  }, [id]);
++  const [cancelling, setCancelling] = useState(false);
++  const [showCancel, setShowCancel] = useState(false);
++  const [reason, setReason] = useState('');
+ 
+-  const fetchBooking = async () => {
++  const load = useCallback(async () => {
++    setError(false);
+     try {
+       const data = await bookingService.getBookingById(id);
+-      setBooking(data);
+-    } catch (error) {
+-      toast.error(t('common.error'));
+-      navigate('/bookings');
++      setBooking(data.booking);
++    } catch (e) {
++      if (e.response?.status === 404) setNotFound(true);
++      else setError(true);
+     } finally {
+       setLoading(false);
+     }
+-  };
++  }, [id]);
+ 
+-  const handleCancel = async () => {
+-    if (!cancelReason.trim()) {
+-      toast.error('Please provide a cancellation reason');
+-      return;
+-    }
++  useEffect(() => { load(); }, [load]);
+ 
++  const cancel = async () => {
+     setCancelling(true);
+     try {
+-      await bookingService.cancelBooking(id, cancelReason);
+-      toast.success('Booking cancelled successfully');
+-      setCancelModal(false);
+-      fetchBooking();
+-    } catch (error) {
+-      toast.error(error.response?.data?.message || t('common.error'));
++      await bookingService.cancelBooking(id, reason.trim());
++      toast.success(t('bookingDetails.cancelled', 'Your booking was cancelled.'));
++      setShowCancel(false);
++      await load();
++    } catch (e) {
++      toast.error(e.response?.data?.message || t('common.error'));
++      await load(); // the booking may have changed (e.g. the cancellation window just closed)
+     } finally {
+       setCancelling(false);
+     }
+   };
+ 
+-  const getStatusColor = (status) => {
+-    const colors = {
+-      Pending: 'bg-yellow-100 text-yellow-800',
+-      Confirmed: 'bg-green-100 text-green-800',
+-      Completed: 'bg-blue-100 text-blue-800',
+-      Cancelled: 'bg-red-100 text-red-800'
+-    };
+-    return colors[status] || 'bg-gray-100 text-gray-800';
+-  };
+-
+-  const getPaymentStatusColor = (status) => {
+-    const colors = {
+-      Pending: 'bg-yellow-100 text-yellow-800',
+-      Paid: 'bg-green-100 text-green-800',
+-      Failed: 'bg-red-100 text-red-800',
+-      Refunded: 'bg-purple-100 text-purple-800'
+-    };
+-    return colors[status] || 'bg-gray-100 text-gray-800';
+-  };
+-
+   if (loading) {
++    return <Layout><div className="flex justify-center items-center h-64"><div className="spinner"></div></div></Layout>;
++  }
++
++  if (notFound || error || !booking) {
+     return (
+       <Layout>
+-        <div className="flex justify-center items-center h-64">
+-          <div className="spinner"></div>
++        <div className="max-w-2xl mx-auto card text-center py-12">
++          <p className="text-gray-700 mb-4">
++            {notFound
++              ? t('bookingDetails.notFound', 'Booking not found.')
++              : t('bookingDetails.loadError', 'Could not load this booking. Please try again.')}
++          </p>
++          <Link to="/dashboard" className="btn-primary">{t('bookingDetails.backToBookings', 'Back to my bookings')}</Link>
+         </div>
+       </Layout>
+     );
+   }
+ 
+-  if (!booking) return null;
++  const status = BOOKING_STATUS[booking.status];
++  const isActive = booking.status === 0 || booking.status === 1;
++  const mapQuery = encodeURIComponent([booking.branch.address, booking.branch.city].filter(Boolean).join(', '));
+ 
+   return (
+     <Layout>
+-      <div className="max-w-4xl mx-auto">
+-        {/* Header */}
+-        <div className="flex justify-between items-center mb-8">
++      <div className="max-w-3xl mx-auto">
++        {justBooked && (
++          <div className="card bg-green-50 border border-green-200 mb-6 flex items-start gap-3">
++            <FiCheckCircle className="text-green-600 text-2xl mt-0.5" />
++            <div>
++              <p className="font-semibold text-green-800">
++                {booking.status === 1
++                  ? t('bookingDetails.justBookedConfirmed', 'Your booking is confirmed!')
++                  : t('bookingDetails.justBookedPending', 'Your booking was received and is waiting for the salon to confirm.')}
++              </p>
++              <p className="text-sm text-green-700">{t('bookingDetails.keepNumber', 'Keep your booking number for reference.')}</p>
++            </div>
++          </div>
++        )}
++
++        <div className="flex justify-between items-start mb-6 gap-4">
+           <div>
+-            <h1 className="text-3xl font-bold text-primary mb-2">
+-              {t('common.viewDetails')}
+-            </h1>
+-            <p className="text-gray-600">Booking ID: {booking.id.substring(0, 8)}</p>
++            <h1 className="text-3xl font-bold text-primary">{t('bookingDetails.title', 'Booking details')}</h1>
++            <p className="text-gray-600 font-mono">{booking.bookingNumber}</p>
+           </div>
+-          <span className={`badge ${getStatusColor(booking.status)}`}>
+-            {t(`status.${booking.status.toLowerCase()}`)}
+-          </span>
++          <span className={`badge ${status?.badge || ''}`}>{status ? t(`admin.status_${status.key}`, status.label) : booking.status}</span>
+         </div>
+ 
+-        <div className="grid md:grid-cols-3 gap-6">
+-          {/* Main Details */}
+-          <div className="md:col-span-2 space-y-6">
+-            {/* Salon & Service Info */}
+-            <div className="card">
+-              <h2 className="text-xl font-semibold mb-4">Service Details</h2>
+-              <div className="space-y-4">
+-                <div>
+-                  <label className="text-sm text-gray-600">Salon</label>
+-                  <p className="font-semibold text-lg">{booking.salon?.name}</p>
+-                </div>
+-                <div>
+-                  <label className="text-sm text-gray-600">Service</label>
+-                  <p className="font-semibold">{booking.service?.name}</p>
+-                  <p className="text-sm text-gray-600">{booking.service?.durationMinutes} minutes</p>
+-                </div>
+-                <div>
+-                  <label className="text-sm text-gray-600">Stylist</label>
+-                  <p className="font-semibold">{booking.stylist?.user?.fullName}</p>
+-                </div>
+-              </div>
++        <div className="card space-y-4 mb-6">
++          <h2 className="text-xl font-semibold">{localized(lang, booking.salon.name, booking.salon.nameAr)}</h2>
++
++          <Detail icon={FiScissors} label={t('bookingFlow.stepService', 'Service')}
++            value={`${localized(lang, booking.service.name, booking.service.nameAr)} (${booking.service.durationMinutes} ${t('bookingFlow.min', 'min')})`} />
++          <Detail icon={FiUser} label={t('bookingFlow.stepStylist', 'Stylist')} value={localized(lang, booking.stylist.name, booking.stylist.nameAr)} />
++          <Detail icon={FiCalendar} label={t('bookingFlow.date', 'Date')} value={formatBookingDate(booking.bookingDate, lang)} />
++          <Detail icon={FiClock} label={t('bookingDetails.time', 'Time')} value={`${booking.startTime} - ${booking.endTime}`} />
++          <Detail
++            icon={FiMapPin}
++            label={t('bookingFlow.branch', 'Branch')}
++            value={[localized(lang, booking.branch.name, booking.branch.nameAr), booking.branch.address, booking.branch.city].filter(Boolean).join(', ')}
++          />
++          {mapQuery && (
++            <a className="text-primary text-sm hover:underline inline-block"
++              href={`https://www.google.com/maps/search/?api=1&query=${mapQuery}`} target="_blank" rel="noreferrer">
++              {t('salon.getDirections', 'Get Directions')}
++            </a>
++          )}
++          {booking.salon.phone && (
++            <Detail icon={FiPhone} label={t('bookingDetails.salonPhone', 'Salon phone')}
++              value={<a className="text-primary hover:underline" href={`tel:${booking.salon.phone}`}>{booking.salon.phone}</a>} />
++          )}
++
++          {booking.notes && (
++            <div className="border-t pt-3">
++              <p className="text-sm text-gray-600">{t('bookingFlow.notes', 'Notes for the salon (optional)')}</p>
++              <p>{booking.notes}</p>
+             </div>
++          )}
+ 
+-            {/* Appointment Details */}
+-            <div className="card">
+-              <h2 className="text-xl font-semibold mb-4">Appointment Details</h2>
+-              <div className="grid md:grid-cols-2 gap-4">
+-                <div className="flex items-start space-x-3">
+-                  <FiCalendar className="text-primary text-xl mt-1" />
+-                  <div>
+-                    <label className="text-sm text-gray-600">Date</label>
+-                    <p className="font-semibold">
+-                      {format(new Date(booking.bookingDate), 'EEEE, dd MMMM yyyy')}
+-                    </p>
+-                  </div>
+-                </div>
+-                <div className="flex items-start space-x-3">
+-                  <FiClock className="text-primary text-xl mt-1" />
+-                  <div>
+-                    <label className="text-sm text-gray-600">Time</label>
+-                    <p className="font-semibold">
+-                      {booking.startTime} - {booking.endTime}
+-                    </p>
+-                  </div>
+-                </div>
+-                <div className="flex items-start space-x-3">
+-                  <FiMapPin className="text-primary text-xl mt-1" />
+-                  <div>
+-                    <label className="text-sm text-gray-600">Location</label>
+-                    <p className="font-semibold">{booking.branch?.name}</p>
+-                    <p className="text-sm text-gray-600">{booking.branch?.address}</p>
+-                  </div>
+-                </div>
+-                <div className="flex items-start space-x-3">
+-                  <FiDollarSign className="text-primary text-xl mt-1" />
+-                  <div>
+-                    <label className="text-sm text-gray-600">Total Price</label>
+-                    <p className="font-semibold text-primary text-xl">
+-                      {booking.totalPrice} OMR
+-                    </p>
+-                  </div>
+-                </div>
+-              </div>
+-
+-              {booking.notes && (
+-                <div className="mt-4 pt-4 border-t">
+-                  <label className="text-sm text-gray-600">Notes</label>
+-                  <p className="text-gray-800">{booking.notes}</p>
+-                </div>
+-              )}
+-            </div>
+-
+-            {/* Payment Details */}
+-            <div className="card">
+-              <h2 className="text-xl font-semibold mb-4">Payment Information</h2>
+-              <div className="space-y-3">
+-                <div className="flex justify-between items-center">
+-                  <span className="text-gray-600">Payment Method</span>
+-                  <span className="font-semibold">
+-                    {booking.payment?.method === 'Cash' ? 'Pay In Person' : 'Online Payment'}
+-                  </span>
+-                </div>
+-                <div className="flex justify-between items-center">
+-                  <span className="text-gray-600">Status</span>
+-                  <span className={`badge ${getPaymentStatusColor(booking.payment?.status)}`}>
+-                    {booking.payment?.status}
+-                  </span>
+-                </div>
+-                {booking.payment?.paidAt && (
+-                  <div className="flex justify-between items-center">
+-                    <span className="text-gray-600">Paid At</span>
+-                    <span className="font-semibold">
+-                      {format(new Date(booking.payment.paidAt), 'dd MMM yyyy HH:mm')}
+-                    </span>
+-                  </div>
+-                )}
+-              </div>
+-            </div>
++          <div className="border-t pt-4 flex justify-between items-center">
++            <span className="text-gray-600">
++              {booking.paymentType === 0 ? t('admin.paymentOnline', 'Online') : t('bookingFlow.payAtSalon', 'Pay at the salon')}
++            </span>
++            <span className="font-bold text-primary text-xl">{formatMoney(booking.totalAmount)}</span>
+           </div>
++        </div>
+ 
+-          {/* Sidebar */}
+-          <div className="md:col-span-1">
+-            {/* Actions */}
+-            {booking.status !== 'Cancelled' && booking.status !== 'Completed' && (
+-              <div className="card space-y-3">
+-                <h3 className="font-semibold mb-4">Actions</h3>
+-                <button
+-                  onClick={() => setCancelModal(true)}
+-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+-                >
+-                  <FiX />
+-                  <span>{t('customer.cancelBooking')}</span>
+-                </button>
+-              </div>
+-            )}
+-
+-            {/* Booking Timeline */}
+-            <div className="card mt-6">
+-              <h3 className="font-semibold mb-4">Timeline</h3>
+-              <div className="space-y-4">
+-                <div className="flex items-start space-x-3">
+-                  <div className="w-2 h-2 bg-primary rounded-full mt-2"></div>
+-                  <div>
+-                    <p className="font-medium">Booking Created</p>
+-                    <p className="text-sm text-gray-600">
+-                      {format(new Date(booking.createdAt), 'dd MMM yyyy HH:mm')}
+-                    </p>
+-                  </div>
+-                </div>
+-                {booking.status === 'Confirmed' && (
+-                  <div className="flex items-start space-x-3">
+-                    <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+-                    <div>
+-                      <p className="font-medium">Confirmed</p>
+-                    </div>
+-                  </div>
+-                )}
+-                {booking.cancelledAt && (
+-                  <div className="flex items-start space-x-3">
+-                    <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+-                    <div>
+-                      <p className="font-medium">Cancelled</p>
+-                      <p className="text-sm text-gray-600">
+-                        {format(new Date(booking.cancelledAt), 'dd MMM yyyy HH:mm')}
+-                      </p>
+-                      {booking.cancellationReason && (
+-                        <p className="text-sm text-gray-600 mt-1">
+-                          Reason: {booking.cancellationReason}
+-                        </p>
+-                      )}
+-                    </div>
+-                  </div>
+-                )}
+-              </div>
+-            </div>
++        {booking.status === 4 && booking.cancellationReason && (
++          <div className="card mb-6">
++            <p className="text-sm text-gray-600">{t('bookingDetails.cancelReason', 'Cancellation reason')}</p>
++            <p>{booking.cancellationReason}</p>
+           </div>
+-        </div>
++        )}
+ 
+-        {/* Cancel Modal */}
+-        {cancelModal && (
+-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+-            <div className="bg-white rounded-xl max-w-md w-full p-6">
+-              <h3 className="text-xl font-semibold mb-4">
+-                {t('customer.confirmCancel')}
+-              </h3>
+-              <p className="text-gray-600 mb-4">
+-                Are you sure you want to cancel this booking? This action cannot be undone.
+-              </p>
+-              <textarea
+-                value={cancelReason}
+-                onChange={(e) => setCancelReason(e.target.value)}
+-                placeholder={t('customer.cancellationReason')}
+-                className="input-field mb-4"
+-                rows="3"
+-              />
+-              <div className="flex space-x-3">
+-                <button
+-                  onClick={() => setCancelModal(false)}
+-                  className="flex-1 btn-outline"
+-                  disabled={cancelling}
+-                >
+-                  {t('common.cancel')}
+-                </button>
+-                <button
+-                  onClick={handleCancel}
+-                  className="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+-                  disabled={cancelling}
+-                >
+-                  {cancelling ? t('common.loading') : 'Confirm Cancel'}
+-                </button>
+-              </div>
++        {/* Cancel */}
++        {isActive && booking.canCancel && !showCancel && (
++          <button className="text-red-600 hover:underline" onClick={() => setShowCancel(true)}>
++            {t('customer.cancelBooking', 'Cancel booking')}
++          </button>
++        )}
++        {isActive && !booking.canCancel && (
++          <p className="text-sm text-gray-600">
++            {t('bookingDetails.cannotCancel', 'This booking can no longer be cancelled online. Please contact the salon.')}
++          </p>
++        )}
++        {showCancel && (
++          <div className="card space-y-3">
++            <label className="block font-semibold" htmlFor="cancel-reason">
++              {t('bookingDetails.reasonLabel', 'Reason (optional)')}
++            </label>
++            <textarea id="cancel-reason" rows={3} maxLength={500} value={reason}
++              onChange={(e) => setReason(e.target.value)} className="input-field" />
++            <div className="flex gap-3">
++              <button className="btn-outline" disabled={cancelling} onClick={() => setShowCancel(false)}>
++                {t('bookingDetails.keepBooking', 'Keep booking')}
++              </button>
++              <button className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50" disabled={cancelling} onClick={cancel}>
++                {cancelling ? t('common.loading', 'Loading...') : t('bookingDetails.confirmCancel', 'Yes, cancel booking')}
++              </button>
+             </div>
+           </div>
+         )}
++
++        <div className="mt-8">
++          <Link to="/dashboard" className="text-primary hover:underline">{t('bookingDetails.backToBookings', 'Back to my bookings')}</Link>
++        </div>
+       </div>
+     </Layout>
+   );
+ };
+ 
+-export default BookingDetails;
+\ No newline at end of file
++const Detail = ({ icon: Icon, label, value }) => (
++  <div className="flex items-start gap-3">
++    <Icon className="text-primary mt-1" />
++    <div>
++      <p className="text-xs text-gray-500">{label}</p>
++      <p className="font-medium">{value}</p>
++    </div>
++  </div>
++);
++
++export default BookingDetails;
+diff --git a/frontend/src/components/customer/BookingFlow.jsx b/frontend/src/components/customer/BookingFlow.jsx
+index aadbe07..ddb57e3 100644
+--- a/frontend/src/components/customer/BookingFlow.jsx
++++ b/frontend/src/components/customer/BookingFlow.jsx
+@@ -1,307 +1,447 @@
+ // ============================================
+ // src/components/customer/BookingFlow.jsx
++// Service -> stylist (and branch) -> date & time -> confirm.
++// Everything comes from the server (catalog + availability); the server re-validates and
++// atomically re-checks the slot on submit, so a stale screen can never double-book.
+ // ============================================
+-import React, { useState, useEffect } from 'react';
+-import { useNavigate, useSearchParams } from 'react-router-dom';
++import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+ import { useTranslation } from 'react-i18next';
+-import { salonService } from '../../services/salonService';
+-import { bookingService } from '../../services/bookingService';
+ import { toast } from 'react-toastify';
++import { FiClock, FiMapPin, FiUser, FiCheck } from 'react-icons/fi';
+ import Layout from '../common/Layout';
+-import { format } from 'date-fns';
++import { bookingService } from '../../services/bookingService';
++import { formatBookingDate, formatMoney, hhmm, localized, toIsoDate } from '../../utils/bookingFormat';
++
++const STEPS = ['service', 'stylist', 'time', 'confirm'];
++
++const Spinner = () => (
++  <div className="flex justify-center items-center h-64"><div className="spinner"></div></div>
++);
+ 
+ const BookingFlow = () => {
+-  const { t } = useTranslation();
++  const { t, i18n } = useTranslation();
++  const lang = i18n.language;
+   const navigate = useNavigate();
+-  const [searchParams] = useSearchParams();
++  const [params] = useSearchParams();
++  const salonId = params.get('salonId');
+ 
+-  const [step, setStep] = useState(1);
+-  const [loading, setLoading] = useState(false);
++  // --- salon picker (when no salonId in the URL) ---
+   const [salons, setSalons] = useState([]);
+-  const [branches, setBranches] = useState([]);
+-  const [services, setServices] = useState([]);
+-  const [stylists, setStylists] = useState([]);
+-  const [timeSlots, setTimeSlots] = useState([]);
+-
+-  const [bookingData, setBookingData] = useState({
+-    salonId: searchParams.get('salon') || '',
+-    branchId: '',
+-    serviceId: '',
+-    stylistId: '',
+-    bookingDate: '',
+-    startTime: '',
+-    paymentMethod: 'Cash',
+-    notes: ''
+-  });
++  const [salonsLoading, setSalonsLoading] = useState(!salonId);
+ 
+-  useEffect(() => {
+-    fetchSalons();
+-  }, []);
++  // --- booking options for the chosen salon ---
++  const [options, setOptions] = useState(null);
++  const [optionsLoading, setOptionsLoading] = useState(Boolean(salonId));
++  const [optionsError, setOptionsError] = useState(null); // 'notfound' | 'error'
+ 
++  // --- selections ---
++  const [step, setStep] = useState(0);
++  const [serviceId, setServiceId] = useState('');
++  const [branchId, setBranchId] = useState('');
++  const [stylistId, setStylistId] = useState('');
++  const [date, setDate] = useState('');
++  const [startTime, setStartTime] = useState('');
++  const [notes, setNotes] = useState('');
++  const [paymentType, setPaymentType] = useState(1); // 1 = pay at the salon
++
++  // --- slots ---
++  const [slots, setSlots] = useState([]);
++  const [slotsLoading, setSlotsLoading] = useState(false);
++  const [slotsError, setSlotsError] = useState(false);
++  const slotRequest = useRef(0);
++
++  const [submitting, setSubmitting] = useState(false);
++
++  // Load the salon picker.
+   useEffect(() => {
+-    if (bookingData.salonId) {
+-      fetchSalonData(bookingData.salonId);
+-    }
+-  }, [bookingData.salonId]);
++    if (salonId) return;
++    let alive = true;
++    bookingService.getBookableSalons()
++      .then((d) => alive && setSalons(d.salons || []))
++      .catch(() => alive && setSalons([]))
++      .finally(() => alive && setSalonsLoading(false));
++    return () => { alive = false; };
++  }, [salonId]);
+ 
++  // Load the options for the salon.
+   useEffect(() => {
+-    if (bookingData.stylistId && bookingData.serviceId && bookingData.bookingDate) {
+-      fetchTimeSlots();
+-    }
+-  }, [bookingData.stylistId, bookingData.serviceId, bookingData.bookingDate]);
++    if (!salonId) return;
++    let alive = true;
++    setOptionsLoading(true);
++    setOptionsError(null);
++    bookingService.getBookingOptions(salonId)
++      .then((d) => alive && setOptions(d))
++      .catch((e) => alive && setOptionsError(e.response?.status === 404 ? 'notfound' : 'error'))
++      .finally(() => alive && setOptionsLoading(false));
++    return () => { alive = false; };
++  }, [salonId]);
+ 
+-  const fetchSalons = async () => {
+-    try {
+-      const data = await salonService.getAllSalons();
+-      setSalons(data.salons);
+-    } catch (error) {
+-      console.error(error);
+-    }
+-  };
++  const service = useMemo(() => options?.services.find((s) => s.id === serviceId), [options, serviceId]);
++  const stylistsForService = useMemo(
++    () => (options?.stylists || []).filter((s) => s.serviceIds.includes(serviceId)),
++    [options, serviceId]
++  );
++  const branchesForService = useMemo(() => {
++    const ids = new Set(stylistsForService.map((s) => s.branchId));
++    return (options?.branches || []).filter((b) => ids.has(b.id));
++  }, [options, stylistsForService]);
++  const stylistsForBranch = useMemo(
++    () => stylistsForService.filter((s) => s.branchId === branchId),
++    [stylistsForService, branchId]
++  );
++  const stylist = useMemo(() => options?.stylists.find((s) => s.id === stylistId), [options, stylistId]);
++  const branch = useMemo(() => options?.branches.find((b) => b.id === branchId), [options, branchId]);
++  const policy = options?.policy;
+ 
+-  const fetchSalonData = async (salonId) => {
+-    try {
+-      const [salonData, servicesData, stylistsData] = await Promise.all([
+-        salonService.getSalonById(salonId),
+-        salonService.getSalonServices(salonId),
+-        salonService.getSalonStylists(salonId)
+-      ]);
+-
+-      setBranches(salonData.salon.branches || []);
+-      setServices(servicesData.services);
+-      setStylists(stylistsData.stylists);
+-    } catch (error) {
+-      console.error(error);
+-    }
+-  };
++  const today = useMemo(() => toIsoDate(new Date()), []);
++  const maxDate = useMemo(() => {
++    const d = new Date();
++    d.setDate(d.getDate() + (policy?.maxDaysAhead ?? 60));
++    return toIsoDate(d);
++  }, [policy]);
+ 
+-  const fetchTimeSlots = async () => {
++  const loadSlots = useCallback(async () => {
++    if (!stylistId || !serviceId || !date) return;
++    const id = ++slotRequest.current;
++    setSlotsLoading(true);
++    setSlotsError(false);
+     try {
+-      const slots = await bookingService.getAvailableSlots(
+-        bookingData.stylistId,
+-        bookingData.serviceId,
+-        bookingData.bookingDate
+-      );
+-      setTimeSlots(slots);
+-    } catch (error) {
+-      console.error(error);
++      const data = await bookingService.getAvailableSlots(stylistId, serviceId, date);
++      if (id !== slotRequest.current) return; // a newer request superseded this one
++      setSlots(data.slots || []);
++    } catch {
++      if (id === slotRequest.current) { setSlots([]); setSlotsError(true); }
++    } finally {
++      if (id === slotRequest.current) setSlotsLoading(false);
+     }
++  }, [stylistId, serviceId, date]);
++
++  useEffect(() => {
++    setStartTime('');
++    loadSlots();
++  }, [loadSlots]);
++
++  const chooseService = (id) => {
++    setServiceId(id);
++    setStylistId('');
++    setStartTime('');
++    // Pre-select the branch when there is only one choice.
++    const ids = new Set((options?.stylists || []).filter((s) => s.serviceIds.includes(id)).map((s) => s.branchId));
++    const candidates = (options?.branches || []).filter((b) => ids.has(b.id));
++    setBranchId(candidates.length === 1 ? candidates[0].id : '');
++    setStep(1);
+   };
+ 
+-  const handleSubmit = async () => {
+-    setLoading(true);
++  const chooseBranch = (id) => { setBranchId(id); setStylistId(''); setStartTime(''); };
++  const chooseStylist = (id) => { setStylistId(id); setStartTime(''); setStep(2); };
++
++  const submit = async () => {
++    setSubmitting(true);
+     try {
+-      const booking = await bookingService.createBooking(bookingData);
+-      toast.success(t('booking.bookingConfirmed'));
+-      navigate(`/booking/${booking.id}`);
+-    } catch (error) {
+-      toast.error(error.response?.data?.message || t('common.error'));
++      const data = await bookingService.createBooking({
++        salonId,
++        branchId,
++        stylistId,
++        serviceId,
++        bookingDate: date,
++        startTime,
++        paymentType,
++        notes: notes.trim() || null,
++      });
++      if (data.checkoutUrl) {
++        window.location.href = data.checkoutUrl; // online payment (only when enabled on the server)
++        return;
++      }
++      toast.success(t('bookingFlow.booked', 'Your booking is confirmed!'));
++      navigate(`/booking/${data.booking.id}`, { replace: true, state: { justBooked: true } });
++    } catch (e) {
++      const code = e.response?.data?.code;
++      toast.error(e.response?.data?.message || t('common.error'));
++      if (code === 'SLOT_UNAVAILABLE' || code === 'BOOKING_BUSY') {
++        setStartTime('');
++        setStep(2);
++        loadSlots(); // show the fresh list of free times
++      }
+     } finally {
+-      setLoading(false);
++      setSubmitting(false);
+     }
+   };
+ 
+-  const selectedService = services.find(s => s.id === bookingData.serviceId);
++  // ---------------------------------------------------------------- salon picker
++  if (!salonId) {
++    return (
++      <Layout>
++        <div className="max-w-5xl mx-auto">
++          <h1 className="text-3xl font-bold text-primary mb-2">{t('bookingFlow.chooseSalon', 'Choose a salon')}</h1>
++          <p className="text-gray-600 mb-8">{t('bookingFlow.chooseSalonHint', 'Salons you can book online with Zayna')}</p>
++          {salonsLoading ? <Spinner /> : salons.length === 0 ? (
++            <div className="card text-center py-12">
++              <p className="text-gray-500 mb-4">{t('bookingFlow.noSalons', 'No salons are accepting online bookings yet.')}</p>
++              <Link to="/salons" className="btn-primary">{t('nav.salons', 'Salons')}</Link>
++            </div>
++          ) : (
++            <div className="grid md:grid-cols-2 gap-6">
++              {salons.map((s) => (
++                <div key={s.id} className="card hover:shadow-xl transition-shadow">
++                  <h2 className="text-xl font-semibold mb-1">{localized(lang, s.name, s.nameAr)}</h2>
++                  <p className="text-sm text-gray-600 flex items-center mb-4">
++                    <FiMapPin className="mr-2 rtl:mr-0 rtl:ml-2" />{[s.city, s.address].filter(Boolean).join(' - ') || '-'}
++                  </p>
++                  <div className="flex justify-between items-center">
++                    <span className="text-sm text-gray-600">
++                      {t('bookingFlow.fromPrice', 'From {{price}}', { price: formatMoney(s.fromPrice) })}
++                    </span>
++                    <Link to={`/book?salonId=${s.id}`} className="btn-primary">{t('bookingFlow.bookNow', 'Book now')}</Link>
++                  </div>
++                </div>
++              ))}
++            </div>
++          )}
++        </div>
++      </Layout>
++    );
++  }
++
++  // ---------------------------------------------------------------- loading / errors
++  if (optionsLoading) return <Layout><Spinner /></Layout>;
++
++  if (optionsError || !options) {
++    return (
++      <Layout>
++        <div className="max-w-2xl mx-auto card text-center py-12">
++          <p className="text-gray-700 mb-4">
++            {optionsError === 'notfound'
++              ? t('bookingFlow.salonNotFound', 'This salon is not available for online booking.')
++              : t('bookingFlow.loadError', 'Could not load the booking options. Please try again.')}
++          </p>
++          <Link to="/book" className="btn-primary">{t('bookingFlow.chooseAnother', 'Choose another salon')}</Link>
++        </div>
++      </Layout>
++    );
++  }
++
++  if (options.services.length === 0 || options.stylists.length === 0) {
++    return (
++      <Layout>
++        <div className="max-w-2xl mx-auto card text-center py-12">
++          <h2 className="text-xl font-semibold mb-2">{localized(lang, options.salon.name, options.salon.nameAr)}</h2>
++          <p className="text-gray-600 mb-4">{t('bookingFlow.notReady', 'This salon is not accepting online bookings yet.')}</p>
++          {options.salon.phone && <a className="text-primary hover:underline" href={`tel:${options.salon.phone}`}>{options.salon.phone}</a>}
++        </div>
++      </Layout>
++    );
++  }
++
++  // ---------------------------------------------------------------- the flow
++  const stepLabels = [
++    t('bookingFlow.stepService', 'Service'),
++    t('bookingFlow.stepStylist', 'Stylist'),
++    t('bookingFlow.stepTime', 'Date & time'),
++    t('bookingFlow.stepConfirm', 'Confirm'),
++  ];
+ 
+   return (
+     <Layout>
+-      <div className="max-w-4xl mx-auto">
+-        <h1 className="text-3xl font-bold text-primary mb-8">{t('customer.newBooking')}</h1>
+-
+-        <div className="grid md:grid-cols-3 gap-8">
+-          {/* Booking Form */}
+-          <div className="md:col-span-2 space-y-6">
+-            {/* Step 1: Select Salon & Branch */}
+-            <div className="card">
+-              <h3 className="text-lg font-semibold mb-4">{t('booking.selectSalon')}</h3>
+-              <select
+-                value={bookingData.salonId}
+-                onChange={(e) => setBookingData({ ...bookingData, salonId: e.target.value, branchId: '' })}
+-                className="input-field mb-4"
+-              >
+-                <option value="">{t('booking.selectSalon')}</option>
+-                {salons.map(salon => (
+-                  <option key={salon.id} value={salon.id}>{salon.name}</option>
+-                ))}
+-              </select>
+-
+-              {branches.length > 0 && (
+-                <select
+-                  value={bookingData.branchId}
+-                  onChange={(e) => setBookingData({ ...bookingData, branchId: e.target.value })}
+-                  className="input-field"
+-                >
+-                  <option value="">{t('booking.selectBranch')}</option>
+-                  {branches.map(branch => (
+-                    <option key={branch.id} value={branch.id}>{branch.name}</option>
+-                  ))}
+-                </select>
+-              )}
++      <div className="max-w-3xl mx-auto">
++        <h1 className="text-3xl font-bold text-primary mb-1">{localized(lang, options.salon.name, options.salon.nameAr)}</h1>
++        <p className="text-gray-600 mb-6">{t('bookingFlow.title', 'Book an appointment')}</p>
++
++        {/* Progress */}
++        <div className="flex justify-between mb-8 gap-2">
++          {STEPS.map((s, i) => (
++            <div key={s} className="flex-1">
++              <div className={`h-2 rounded ${step >= i ? 'bg-primary' : 'bg-gray-200'}`} />
++              <p className={`text-xs sm:text-sm mt-2 text-center ${step >= i ? 'text-primary font-medium' : 'text-gray-400'}`}>
++                {stepLabels[i]}
++              </p>
+             </div>
++          ))}
++        </div>
+ 
+-            {/* Step 2: Select Service */}
+-            {bookingData.branchId && (
+-              <div className="card">
+-                <h3 className="text-lg font-semibold mb-4">{t('booking.selectService')}</h3>
+-                <div className="grid grid-cols-2 gap-4">
+-                  {services.map(service => (
++        {/* 1. Service */}
++        {step === 0 && (
++          <div className="space-y-3">
++            {options.services.map((s) => (
++              <button
++                key={s.id}
++                onClick={() => chooseService(s.id)}
++                className="card w-full text-left rtl:text-right hover:shadow-xl transition-shadow flex justify-between items-center"
++              >
++                <div>
++                  <p className="font-semibold">{localized(lang, s.name, s.nameAr)}</p>
++                  {s.description && <p className="text-sm text-gray-600">{s.description}</p>}
++                  <p className="text-sm text-gray-500 flex items-center mt-1">
++                    <FiClock className="mr-1 rtl:mr-0 rtl:ml-1" />{s.durationMinutes} {t('bookingFlow.min', 'min')}
++                  </p>
++                </div>
++                <span className="font-semibold text-primary">{formatMoney(s.price)}</span>
++              </button>
++            ))}
++          </div>
++        )}
++
++        {/* 2. Stylist (and branch) */}
++        {step === 1 && service && (
++          <div className="space-y-6">
++            {branchesForService.length > 1 && (
++              <div>
++                <h3 className="font-semibold mb-2">{t('bookingFlow.branch', 'Branch')}</h3>
++                <div className="grid sm:grid-cols-2 gap-3">
++                  {branchesForService.map((b) => (
++                    <button
++                      key={b.id}
++                      onClick={() => chooseBranch(b.id)}
++                      className={`card text-left rtl:text-right ${branchId === b.id ? 'ring-2 ring-primary' : ''}`}
++                    >
++                      <p className="font-semibold">{localized(lang, b.name, b.nameAr)}</p>
++                      <p className="text-sm text-gray-600">{[b.city, b.address].filter(Boolean).join(' - ')}</p>
++                    </button>
++                  ))}
++                </div>
++              </div>
++            )}
++            {branchId && (
++              <div>
++                <h3 className="font-semibold mb-2">{t('bookingFlow.chooseStylist', 'Choose a stylist')}</h3>
++                <div className="grid sm:grid-cols-2 gap-3">
++                  {stylistsForBranch.map((s) => (
+                     <button
+-                      key={service.id}
+-                      onClick={() => setBookingData({ ...bookingData, serviceId: service.id })}
+-                      className={`p-4 rounded-lg border-2 text-left transition-all ${
+-                        bookingData.serviceId === service.id
+-                          ? 'border-primary bg-primary/10'
+-                          : 'border-gray-200 hover:border-primary/50'
+-                      }`}
++                      key={s.id}
++                      onClick={() => chooseStylist(s.id)}
++                      className="card text-left rtl:text-right hover:shadow-xl transition-shadow flex items-center gap-3"
+                     >
+-                      <div className="font-semibold mb-1">{service.name}</div>
+-                      <div className="text-sm text-gray-600 mb-2">{service.durationMinutes} min</div>
+-                      <div className="text-primary font-semibold">{service.price} OMR</div>
++                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary"><FiUser /></div>
++                      <div>
++                        <p className="font-semibold">{localized(lang, s.name, s.nameAr)}</p>
++                        {s.yearsOfExperience > 0 && (
++                          <p className="text-xs text-gray-500">{t('bookingFlow.years', '{{n}} years experience', { n: s.yearsOfExperience })}</p>
++                        )}
++                      </div>
+                     </button>
+                   ))}
+                 </div>
+               </div>
+             )}
++            <button className="text-sm text-gray-500 underline" onClick={() => setStep(0)}>{t('wizard.back', 'Back')}</button>
++          </div>
++        )}
++
++        {/* 3. Date & time */}
++        {step === 2 && (
++          <div className="space-y-6">
++            <div>
++              <label className="block font-semibold mb-2" htmlFor="booking-date">{t('bookingFlow.date', 'Date')}</label>
++              <input
++                id="booking-date"
++                type="date"
++                min={today}
++                max={maxDate}
++                value={date}
++                onChange={(e) => setDate(e.target.value)}
++                className="input-field max-w-xs"
++              />
++            </div>
+ 
+-            {/* Step 3: Select Stylist & Date & Time */}
+-            {bookingData.serviceId && (
+-              <>
+-                <div className="card">
+-                  <h3 className="text-lg font-semibold mb-4">{t('booking.selectStylist')}</h3>
+-                  <div className="space-y-2">
+-                    {stylists.filter(s => s.services.some(srv => srv.id === bookingData.serviceId)).map(stylist => (
++            {date && (
++              <div>
++                <h3 className="font-semibold mb-2">{t('bookingFlow.availableTimes', 'Available times')}</h3>
++                {slotsLoading ? (
++                  <div className="py-6 flex"><div className="spinner"></div></div>
++                ) : slotsError ? (
++                  <p className="text-red-600">
++                    {t('bookingFlow.slotsError', 'Could not load times.')}{' '}
++                    <button className="underline" onClick={loadSlots}>{t('admin.retry', 'Retry')}</button>
++                  </p>
++                ) : slots.length === 0 ? (
++                  <p className="text-gray-600">{t('bookingFlow.noSlots', 'No available times on this date. Please try another day.')}</p>
++                ) : (
++                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
++                    {slots.map((s) => (
+                       <button
+-                        key={stylist.id}
+-                        onClick={() => setBookingData({ ...bookingData, stylistId: stylist.id })}
+-                        className={`w-full p-4 rounded-lg border-2 text-left transition-all ${
+-                          bookingData.stylistId === stylist.id
+-                            ? 'border-primary bg-primary/10'
+-                            : 'border-gray-200 hover:border-primary/50'
+-                        }`}
++                        key={s}
++                        onClick={() => setStartTime(s)}
++                        className={`py-2 rounded-lg border ${startTime === s ? 'bg-primary text-white border-primary' : 'hover:border-primary'}`}
+                       >
+-                        <div className="font-semibold">{stylist.fullName}</div>
+-                        <div className="text-sm text-gray-600">{stylist.yearsOfExperience} years experience</div>
++                        {hhmm(s)}
+                       </button>
+                     ))}
+                   </div>
+-                </div>
+-
+-                <div className="card">
+-                  <h3 className="text-lg font-semibold mb-4">{t('booking.selectDate')}</h3>
+-                  <input
+-                    type="date"
+-                    value={bookingData.bookingDate}
+-                    onChange={(e) => setBookingData({ ...bookingData, bookingDate: e.target.value })}
+-                    min={format(new Date(), 'yyyy-MM-dd')}
+-                    className="input-field"
+-                  />
+-                </div>
+-
+-                {timeSlots.length > 0 && (
+-                  <div className="card">
+-                    <h3 className="text-lg font-semibold mb-4">{t('booking.selectTime')}</h3>
+-                    <div className="grid grid-cols-4 gap-2">
+-                      {timeSlots.filter(slot => slot.isAvailable).map((slot, idx) => (
+-                        <button
+-                          key={idx}
+-                          onClick={() => setBookingData({ ...bookingData, startTime: slot.startTime })}
+-                          className={`py-2 rounded-lg border-2 transition-all ${
+-                            bookingData.startTime === slot.startTime
+-                              ? 'border-primary bg-primary text-white'
+-                              : 'border-gray-200 hover:border-primary/50'
+-                          }`}
+-                        >
+-                          {slot.startTime}
+-                        </button>
+-                      ))}
+-                    </div>
+-                  </div>
+                 )}
+-              </>
+-            )}
+-
+-            {/* Payment & Notes */}
+-            {bookingData.startTime && (
+-              <div className="card">
+-                <h3 className="text-lg font-semibold mb-4">{t('booking.paymentMethod')}</h3>
+-                <div className="grid grid-cols-2 gap-4 mb-4">
+-                  <button
+-                    onClick={() => setBookingData({ ...bookingData, paymentMethod: 'Cash' })}
+-                    className={`p-4 rounded-lg border-2 ${
+-                      bookingData.paymentMethod === 'Cash'
+-                        ? 'border-primary bg-primary/10'
+-                        : 'border-gray-200'
+-                    }`}
+-                  >
+-                    {t('booking.payInPerson')}
+-                  </button>
+-                  <button
+-                    onClick={() => setBookingData({ ...bookingData, paymentMethod: 'Online' })}
+-                    className={`p-4 rounded-lg border-2 ${
+-                      bookingData.paymentMethod === 'Online'
+-                        ? 'border-primary bg-primary/10'
+-                        : 'border-gray-200'
+-                    }`}
+-                  >
+-                    {t('booking.payOnline')}
+-                  </button>
+-                </div>
+-
+-                <textarea
+-                  value={bookingData.notes}
+-                  onChange={(e) => setBookingData({ ...bookingData, notes: e.target.value })}
+-                  placeholder={t('booking.notes')}
+-                  className="input-field"
+-                  rows="3"
+-                />
+-
+-                <button
+-                  onClick={handleSubmit}
+-                  disabled={loading}
+-                  className="btn-primary w-full mt-4"
+-                >
+-                  {loading ? t('common.loading') : t('booking.bookNow')}
+-                </button>
+               </div>
+             )}
++
++            <div className="flex gap-3">
++              <button className="btn-outline" onClick={() => setStep(1)}>{t('wizard.back', 'Back')}</button>
++              <button className="btn-primary" disabled={!startTime} onClick={() => setStep(3)}>{t('wizard.next', 'Next')}</button>
++            </div>
+           </div>
++        )}
+ 
+-          {/* Booking Summary */}
+-          <div className="md:col-span-1">
+-            <div className="card sticky top-4">
+-              <h3 className="text-lg font-semibold mb-4">Booking Summary</h3>
+-              <div className="space-y-3 text-sm">
+-                {selectedService && (
+-                  <>
+-                    <div>
+-                      <span className="text-gray-600">Service:</span>
+-                      <p className="font-semibold">{selectedService.name}</p>
+-                    </div>
+-                    <div>
+-                      <span className="text-gray-600">Price:</span>
+-                      <p className="font-semibold text-primary">{selectedService.price} OMR</p>
+-                    </div>
+-                  </>
+-                )}
+-                {bookingData.bookingDate && (
+-                  <div>
+-                    <span className="text-gray-600">Date:</span>
+-                    <p className="font-semibold">{format(new Date(bookingData.bookingDate), 'dd MMM yyyy')}</p>
+-                  </div>
+-                )}
+-                {bookingData.startTime && (
+-                  <div>
+-                    <span className="text-gray-600">Time:</span>
+-                    <p className="font-semibold">{bookingData.startTime}</p>
+-                  </div>
+-                )}
++        {/* 4. Confirm */}
++        {step === 3 && service && stylist && branch && (
++          <div className="space-y-6">
++            <div className="card space-y-3">
++              <h3 className="font-semibold text-lg">{t('bookingFlow.summary', 'Booking summary')}</h3>
++              <Row label={t('bookingFlow.stepService', 'Service')} value={`${localized(lang, service.name, service.nameAr)} (${service.durationMinutes} ${t('bookingFlow.min', 'min')})`} />
++              <Row label={t('bookingFlow.stepStylist', 'Stylist')} value={localized(lang, stylist.name, stylist.nameAr)} />
++              <Row label={t('bookingFlow.branch', 'Branch')} value={[localized(lang, branch.name, branch.nameAr), branch.address].filter(Boolean).join(' - ')} />
++              <Row label={t('bookingFlow.date', 'Date')} value={`${formatBookingDate(date, lang)} - ${hhmm(startTime)}`} />
++              <div className="border-t pt-3 flex justify-between items-center">
++                <span className="font-semibold">{t('bookingFlow.total', 'Total')}</span>
++                <span className="font-bold text-primary text-xl">{formatMoney(service.price)}</span>
+               </div>
+             </div>
++
++            <div className="card space-y-3">
++              <h3 className="font-semibold">{t('bookingFlow.payment', 'Payment')}</h3>
++              <label className="flex items-center gap-2">
++                <input type="radio" name="payment" checked={paymentType === 1} onChange={() => setPaymentType(1)} />
++                {t('bookingFlow.payAtSalon', 'Pay at the salon')}
++              </label>
++              {policy?.onlinePaymentEnabled && (
++                <label className="flex items-center gap-2">
++                  <input type="radio" name="payment" checked={paymentType === 0} onChange={() => setPaymentType(0)} />
++                  {t('bookingFlow.payOnline', 'Pay online')}
++                </label>
++              )}
++            </div>
++
++            <div>
++              <label className="block font-semibold mb-2" htmlFor="booking-notes">{t('bookingFlow.notes', 'Notes for the salon (optional)')}</label>
++              <textarea
++                id="booking-notes"
++                value={notes}
++                onChange={(e) => setNotes(e.target.value)}
++                maxLength={500}
++                rows={3}
++                className="input-field"
++              />
++            </div>
++
++            <p className="text-xs text-gray-500">
++              {t('bookingFlow.cancelPolicy', 'You can cancel free of charge up to {{h}} hour(s) before your appointment.', { h: policy?.cancellationCutoffHours ?? 2 })}
++            </p>
++
++            <div className="flex gap-3">
++              <button className="btn-outline" disabled={submitting} onClick={() => setStep(2)}>{t('wizard.back', 'Back')}</button>
++              <button className="btn-primary flex items-center gap-2" disabled={submitting} onClick={submit}>
++                <FiCheck />
++                {submitting ? t('common.loading', 'Loading...') : t('bookingFlow.confirm', 'Confirm booking')}
++              </button>
++            </div>
+           </div>
+-        </div>
++        )}
+       </div>
+     </Layout>
+   );
+ };
+ 
+-export default BookingFlow;
+\ No newline at end of file
++const Row = ({ label, value }) => (
++  <div className="flex justify-between gap-4 text-sm">
++    <span className="text-gray-600">{label}</span>
++    <span className="font-medium text-right rtl:text-left">{value}</span>
++  </div>
++);
++
++export default BookingFlow;
+diff --git a/frontend/src/components/customer/Dashboard.jsx b/frontend/src/components/customer/Dashboard.jsx
+index 05e2b29..cc071ba 100644
+--- a/frontend/src/components/customer/Dashboard.jsx
++++ b/frontend/src/components/customer/Dashboard.jsx
+@@ -1,126 +1,93 @@
+ // ============================================
+ // src/components/customer/Dashboard.jsx
+ // ============================================
+-import React, { useState, useEffect } from 'react';
++import React, { useCallback, useEffect, useState } from 'react';
+ import { Link } from 'react-router-dom';
+ import { useTranslation } from 'react-i18next';
+-import { bookingService } from '../../services/bookingService';
+-import { format } from 'date-fns';
+ import { FiCalendar, FiClock, FiMapPin, FiStar } from 'react-icons/fi';
+ import Layout from '../common/Layout';
++import { bookingService } from '../../services/bookingService';
++import { ACTIVE_STATUSES, BOOKING_STATUS, formatBookingDate, formatMoney, localized, toIsoDate } from '../../utils/bookingFormat';
+ 
+ const CustomerDashboard = () => {
+-  const { t } = useTranslation();
++  const { t, i18n } = useTranslation();
++  const lang = i18n.language;
+   const [bookings, setBookings] = useState([]);
+   const [loading, setLoading] = useState(true);
++  const [error, setError] = useState(false);
+ 
+-  useEffect(() => {
+-    fetchBookings();
+-  }, []);
+-
+-  const fetchBookings = async () => {
++  const load = useCallback(async () => {
++    setError(false);
+     try {
+       const data = await bookingService.getMyBookings();
+-      setBookings(data.bookings);
+-    } catch (error) {
+-      console.error('Error fetching bookings:', error);
++      setBookings(data.bookings || []);
++    } catch {
++      setError(true);
+     } finally {
+       setLoading(false);
+     }
+-  };
++  }, []);
+ 
+-  const upcomingBookings = bookings.filter(
+-    b => new Date(b.bookingDate) >= new Date() && b.status !== 'Cancelled'
+-  );
++  useEffect(() => { load(); }, [load]);
+ 
+-  const pastBookings = bookings.filter(
+-    b => new Date(b.bookingDate) < new Date() || b.status === 'Completed'
+-  );
++  // Upcoming = still-active bookings from today on (dates are salon-local "yyyy-MM-dd" strings).
++  const today = toIsoDate(new Date());
++  const upcoming = bookings
++    .filter((b) => ACTIVE_STATUSES.includes(b.status) && b.bookingDate >= today)
++    .sort((a, b) => `${a.bookingDate} ${a.startTime}`.localeCompare(`${b.bookingDate} ${b.startTime}`));
++  const upcomingIds = new Set(upcoming.map((b) => b.id));
++  const past = bookings.filter((b) => !upcomingIds.has(b.id));
+ 
+-  const getStatusBadge = (status) => {
+-    const badges = {
+-      Pending: 'badge-pending',
+-      Confirmed: 'badge-confirmed',
+-      Completed: 'badge-completed',
+-      Cancelled: 'badge-cancelled'
+-    };
+-    return `badge ${badges[status] || ''}`;
++  const badge = (status) => {
++    const s = BOOKING_STATUS[status];
++    return <span className={`badge ${s?.badge || ''}`}>{s ? t(`admin.status_${s.key}`, s.label) : status}</span>;
+   };
+ 
+   if (loading) {
+-    return (
+-      <Layout>
+-        <div className="flex justify-center items-center h-64">
+-          <div className="spinner"></div>
+-        </div>
+-      </Layout>
+-    );
++    return <Layout><div className="flex justify-center items-center h-64"><div className="spinner"></div></div></Layout>;
+   }
+ 
+   return (
+     <Layout>
+       <div className="max-w-7xl mx-auto">
+-        {/* Header */}
+         <div className="flex justify-between items-center mb-8">
+           <h1 className="text-3xl font-bold text-primary">{t('customer.dashboard')}</h1>
+-          <Link to="/book" className="btn-primary">
+-            {t('customer.newBooking')}
+-          </Link>
++          <Link to="/book" className="btn-primary">{t('customer.newBooking')}</Link>
+         </div>
+ 
+-        {/* Upcoming Bookings */}
++        {error && (
++          <div className="card text-center py-8 mb-8">
++            <p className="text-red-600 mb-3">{t('admin.loadError', 'Could not load data. Please try again.')}</p>
++            <button className="btn-outline" onClick={() => { setLoading(true); load(); }}>{t('admin.retry', 'Retry')}</button>
++          </div>
++        )}
++
++        {/* Upcoming */}
+         <div className="mb-8">
+           <h2 className="text-2xl font-semibold mb-4">{t('customer.upcomingBookings')}</h2>
+-          {upcomingBookings.length === 0 ? (
++          {upcoming.length === 0 ? (
+             <div className="card text-center py-12">
+               <FiCalendar className="mx-auto text-5xl text-gray-300 mb-4" />
+-              <p className="text-gray-500">{t('common.noData')}</p>
+-              <Link to="/book" className="btn-primary mt-4 inline-block">
+-                {t('customer.newBooking')}
+-              </Link>
++              <p className="text-gray-500">{t('customer.noUpcoming', 'You have no upcoming bookings.')}</p>
++              <Link to="/book" className="btn-primary mt-4 inline-block">{t('customer.newBooking')}</Link>
+             </div>
+           ) : (
+             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+-              {upcomingBookings.map((booking) => (
+-                <div key={booking.id} className="card hover:shadow-xl transition-shadow">
+-                  <div className="flex justify-between items-start mb-4">
+-                    <h3 className="font-semibold text-lg">{booking.salonName}</h3>
+-                    <span className={getStatusBadge(booking.status)}>
+-                      {t(`status.${booking.status.toLowerCase()}`)}
+-                    </span>
++              {upcoming.map((b) => (
++                <div key={b.id} className="card hover:shadow-xl transition-shadow">
++                  <div className="flex justify-between items-start mb-4 gap-2">
++                    <h3 className="font-semibold text-lg">{localized(lang, b.salon.name, b.salon.nameAr)}</h3>
++                    {badge(b.status)}
+                   </div>
+-
+                   <div className="space-y-2 text-sm text-gray-600 mb-4">
+-                    <div className="flex items-center">
+-                      <FiCalendar className="mr-2" />
+-                      {format(new Date(booking.bookingDate), 'dd MMM yyyy')}
+-                    </div>
+-                    <div className="flex items-center">
+-                      <FiClock className="mr-2" />
+-                      {booking.startTime}
+-                    </div>
+-                    <div className="flex items-center">
+-                      <FiMapPin className="mr-2" />
+-                      {booking.branchName}
+-                    </div>
+-                    <div className="flex items-center">
+-                      <FiStar className="mr-2" />
+-                      {booking.stylistName}
+-                    </div>
++                    <div className="flex items-center"><FiCalendar className="mr-2 rtl:mr-0 rtl:ml-2" />{formatBookingDate(b.bookingDate, lang)}</div>
++                    <div className="flex items-center"><FiClock className="mr-2 rtl:mr-0 rtl:ml-2" />{b.startTime} - {b.endTime}</div>
++                    <div className="flex items-center"><FiMapPin className="mr-2 rtl:mr-0 rtl:ml-2" />{localized(lang, b.branch.name, b.branch.nameAr)}</div>
++                    <div className="flex items-center"><FiStar className="mr-2 rtl:mr-0 rtl:ml-2" />{localized(lang, b.stylist.name, b.stylist.nameAr)} - {localized(lang, b.service.name, b.service.nameAr)}</div>
+                   </div>
+-
+-                  <div className="border-t pt-4">
+-                    <div className="flex justify-between items-center">
+-                      <span className="font-semibold text-primary text-lg">
+-                        {booking.totalPrice} OMR
+-                      </span>
+-                      <Link
+-                        to={`/booking/${booking.id}`}
+-                        className="text-primary hover:underline text-sm"
+-                      >
+-                        {t('common.viewDetails')}
+-                      </Link>
+-                    </div>
++                  <div className="border-t pt-4 flex justify-between items-center">
++                    <span className="font-semibold text-primary text-lg">{formatMoney(b.totalAmount)}</span>
++                    <Link to={`/booking/${b.id}`} className="text-primary hover:underline text-sm">{t('common.viewDetails')}</Link>
+                   </div>
+                 </div>
+               ))}
+@@ -128,33 +95,25 @@ const CustomerDashboard = () => {
+           )}
+         </div>
+ 
+-        {/* Past Bookings */}
++        {/* Past */}
+         <div>
+           <h2 className="text-2xl font-semibold mb-4">{t('customer.pastBookings')}</h2>
+-          {pastBookings.length === 0 ? (
+-            <div className="card text-center py-8">
+-              <p className="text-gray-500">{t('common.noData')}</p>
+-            </div>
++          {past.length === 0 ? (
++            <div className="card text-center py-8"><p className="text-gray-500">{t('customer.noPast', 'No past bookings yet.')}</p></div>
+           ) : (
+-            <div className="card">
+-              <div className="space-y-4">
+-                {pastBookings.slice(0, 5).map((booking) => (
+-                  <div key={booking.id} className="flex items-center justify-between border-b pb-4 last:border-b-0">
+-                    <div className="flex-1">
+-                      <h4 className="font-semibold">{booking.salonName}</h4>
+-                      <p className="text-sm text-gray-600">
+-                        {format(new Date(booking.bookingDate), 'dd MMM yyyy')} at {booking.startTime}
+-                      </p>
+-                    </div>
+-                    <div className="text-right">
+-                      <p className="font-semibold text-primary">{booking.totalPrice} OMR</p>
+-                      <span className={getStatusBadge(booking.status)}>
+-                        {t(`status.${booking.status.toLowerCase()}`)}
+-                      </span>
+-                    </div>
++            <div className="card space-y-4">
++              {past.slice(0, 10).map((b) => (
++                <Link key={b.id} to={`/booking/${b.id}`} className="flex items-center justify-between border-b pb-4 last:border-b-0 last:pb-0 hover:bg-gray-50 -mx-2 px-2 rounded">
++                  <div className="flex-1">
++                    <h4 className="font-semibold">{localized(lang, b.salon.name, b.salon.nameAr)}</h4>
++                    <p className="text-sm text-gray-600">{formatBookingDate(b.bookingDate, lang)} - {b.startTime}</p>
++                  </div>
++                  <div className="text-right rtl:text-left space-y-1">
++                    <p className="font-semibold text-primary">{formatMoney(b.totalAmount)}</p>
++                    {badge(b.status)}
+                   </div>
+-                ))}
+-              </div>
++                </Link>
++              ))}
+             </div>
+           )}
+         </div>
+@@ -163,4 +122,4 @@ const CustomerDashboard = () => {
+   );
+ };
+ 
+-export default CustomerDashboard;
+\ No newline at end of file
++export default CustomerDashboard;
+diff --git a/frontend/src/components/customer/SalonList.jsx b/frontend/src/components/customer/SalonList.jsx
+index 1205c96..150af29 100644
+--- a/frontend/src/components/customer/SalonList.jsx
++++ b/frontend/src/components/customer/SalonList.jsx
+@@ -6,6 +6,8 @@ import React, { useState, useEffect } from 'react';
+ import { Link } from 'react-router-dom';
+ import { useTranslation } from 'react-i18next';
+ import { salonService } from '../../services/salonService';
++import { bookingService } from '../../services/bookingService';
++import { formatMoney, localized } from '../../utils/bookingFormat';
+ import Layout from '../common/Layout';
+ import { FiMapPin, FiPhone, FiStar } from 'react-icons/fi';
+ import { useAuth } from '../../contexts/AuthContext';
+@@ -14,13 +16,23 @@ import { toSlug } from './SalonDetail';
+ 
+ 
+ const SalonList = () => {
+-  const { t } = useTranslation();
++  const { t, i18n } = useTranslation();
+   const { user } = useAuth();
+ 
+   const [salons, setSalons] = useState([]);
+   const [loading, setLoading] = useState(true);
+   const [searchTerm, setSearchTerm] = useState('');
+   const [revealedPhones, setRevealedPhones] = useState({});
++  // Registered, approved salons that can be booked online with Zayna (separate from the directory below).
++  const [bookable, setBookable] = useState([]);
++
++  useEffect(() => {
++    let alive = true;
++    bookingService.getBookableSalons()
++      .then((d) => alive && setBookable(d.salons || []))
++      .catch(() => alive && setBookable([])); // the directory below still works if this fails
++    return () => { alive = false; };
++  }, []);
+   const navigate = useNavigate();
+ 
+   useEffect(() => {
+@@ -79,6 +91,40 @@ const SalonList = () => {
+           />
+         </div>
+ 
++        {/* Book online with Zayna */}
++        {bookable.length > 0 && (
++          <div className="mb-10">
++            <h2 className="text-2xl font-semibold mb-4">{t('bookingFlow.bookOnlineTitle', 'Book online with Zayna')}</h2>
++            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
++              {bookable
++                .filter((s) => {
++                  const q = searchTerm.trim().toLowerCase();
++                  return !q || s.name?.toLowerCase().includes(q) || s.nameAr?.includes(searchTerm.trim());
++                })
++                .map((s) => (
++                  <div key={s.id} className="card hover:shadow-xl transition-all flex flex-col">
++                    <span className="self-start px-3 py-1 text-xs font-semibold rounded-full bg-green-600 text-white mb-3">
++                      {t('salon.verified', 'Verified')}
++                    </span>
++                    <h3 className="text-lg font-semibold mb-1">{localized(i18n.language, s.name, s.nameAr)}</h3>
++                    <p className="text-sm text-gray-600 flex items-center mb-4">
++                      <FiMapPin className="mr-2 rtl:mr-0 rtl:ml-2 shrink-0" />
++                      {[s.city, s.address].filter(Boolean).join(' - ') || '-'}
++                    </p>
++                    <div className="mt-auto flex justify-between items-center">
++                      <span className="text-sm text-gray-600">
++                        {t('bookingFlow.fromPrice', 'From {{price}}', { price: formatMoney(s.fromPrice) })}
++                      </span>
++                      <Link to={`/book?salonId=${s.id}`} className="btn-primary">
++                        {t('bookingFlow.bookNow', 'Book now')}
++                      </Link>
++                    </div>
++                  </div>
++                ))}
++            </div>
++          </div>
++        )}
++
+         {/* Grid */}
+         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
+           {filteredSalons.map((salon) => {
+diff --git a/frontend/src/i18n/ar.json b/frontend/src/i18n/ar.json
+index d19acf9..0a62353 100644
+--- a/frontend/src/i18n/ar.json
++++ b/frontend/src/i18n/ar.json
+@@ -81,7 +81,9 @@
+     "cancelBooking": "إلغاء الحجز",
+     "confirmCancel": "هل أنت متأكد من إلغاء هذا الحجز؟",
+     "cancellationReason": "سبب الإلغاء",
+-    "loyaltyPoints": "نقاط الولاء"
++    "loyaltyPoints": "نقاط الولاء",
++    "noUpcoming": "لا توجد لديك حجوزات قادمة.",
++    "noPast": "لا توجد حجوزات سابقة بعد."
+   },
+   "salon": {
+     "dashboard": "لوحة تحكم الصالون",
+@@ -447,5 +449,56 @@
+     "alreadySignedIn": "أنت مسجّل الدخول بالفعل.",
+     "submitAsSignedIn": "أنت مسجّل الدخول. أرسل صالونك للمراجعة.",
+     "haveAccount": "لديك حساب بالفعل؟"
++  },
++  "bookingFlow": {
++    "chooseSalon": "اختر صالونًا",
++    "chooseSalonHint": "صالونات يمكنك الحجز فيها إلكترونيًا عبر زينة",
++    "noSalons": "لا توجد صالونات تقبل الحجز الإلكتروني حاليًا.",
++    "fromPrice": "ابتداءً من {{price}}",
++    "bookNow": "احجز الآن",
++    "bookOnlineTitle": "احجز إلكترونيًا عبر زينة",
++    "salonNotFound": "هذا الصالون غير متاح للحجز الإلكتروني.",
++    "loadError": "تعذّر تحميل خيارات الحجز. حاول مرة أخرى.",
++    "chooseAnother": "اختر صالونًا آخر",
++    "notReady": "هذا الصالون لا يقبل الحجز الإلكتروني حاليًا.",
++    "title": "احجز موعدًا",
++    "stepService": "الخدمة",
++    "stepStylist": "المصفف",
++    "stepTime": "التاريخ والوقت",
++    "stepConfirm": "التأكيد",
++    "min": "دقيقة",
++    "branch": "الفرع",
++    "chooseStylist": "اختر المصفف",
++    "years": "{{n}} سنوات خبرة",
++    "date": "التاريخ",
++    "availableTimes": "الأوقات المتاحة",
++    "slotsError": "تعذّر تحميل الأوقات.",
++    "noSlots": "لا توجد أوقات متاحة في هذا التاريخ. جرّب يومًا آخر.",
++    "summary": "ملخص الحجز",
++    "total": "الإجمالي",
++    "payment": "الدفع",
++    "payAtSalon": "الدفع في الصالون",
++    "payOnline": "الدفع إلكترونيًا",
++    "notes": "ملاحظات للصالون (اختياري)",
++    "cancelPolicy": "يمكنك الإلغاء مجانًا حتى {{h}} ساعة قبل موعدك.",
++    "confirm": "تأكيد الحجز",
++    "booked": "تم تأكيد حجزك!"
++  },
++  "bookingDetails": {
++    "title": "تفاصيل الحجز",
++    "notFound": "الحجز غير موجود.",
++    "loadError": "تعذّر تحميل هذا الحجز. حاول مرة أخرى.",
++    "backToBookings": "العودة إلى حجوزاتي",
++    "justBookedConfirmed": "تم تأكيد حجزك!",
++    "justBookedPending": "تم استلام حجزك وهو بانتظار تأكيد الصالون.",
++    "keepNumber": "احتفظ برقم الحجز للرجوع إليه.",
++    "time": "الوقت",
++    "salonPhone": "هاتف الصالون",
++    "cancelReason": "سبب الإلغاء",
++    "cannotCancel": "لم يعد بالإمكان إلغاء هذا الحجز إلكترونيًا. يرجى التواصل مع الصالون.",
++    "reasonLabel": "السبب (اختياري)",
++    "keepBooking": "الإبقاء على الحجز",
++    "confirmCancel": "نعم، إلغاء الحجز",
++    "cancelled": "تم إلغاء حجزك."
+   }
+ }
+diff --git a/frontend/src/i18n/en.json b/frontend/src/i18n/en.json
+index eb969f1..bffbf8b 100644
+--- a/frontend/src/i18n/en.json
++++ b/frontend/src/i18n/en.json
+@@ -81,7 +81,9 @@
+     "cancelBooking": "Cancel Booking",
+     "confirmCancel": "Are you sure you want to cancel this booking?",
+     "cancellationReason": "Cancellation Reason",
+-    "loyaltyPoints": "Loyalty Points"
++    "loyaltyPoints": "Loyalty Points",
++    "noUpcoming": "You have no upcoming bookings.",
++    "noPast": "No past bookings yet."
+   },
+   "salon": {
+     "dashboard": "Salon Dashboard",
+@@ -450,5 +452,56 @@
+     "alreadySignedIn": "You are already signed in.",
+     "submitAsSignedIn": "You are signed in. Submit your salon for approval.",
+     "haveAccount": "Already have an account?"
++  },
++  "bookingFlow": {
++    "chooseSalon": "Choose a salon",
++    "chooseSalonHint": "Salons you can book online with Zayna",
++    "noSalons": "No salons are accepting online bookings yet.",
++    "fromPrice": "From {{price}}",
++    "bookNow": "Book now",
++    "bookOnlineTitle": "Book online with Zayna",
++    "salonNotFound": "This salon is not available for online booking.",
++    "loadError": "Could not load the booking options. Please try again.",
++    "chooseAnother": "Choose another salon",
++    "notReady": "This salon is not accepting online bookings yet.",
++    "title": "Book an appointment",
++    "stepService": "Service",
++    "stepStylist": "Stylist",
++    "stepTime": "Date & time",
++    "stepConfirm": "Confirm",
++    "min": "min",
++    "branch": "Branch",
++    "chooseStylist": "Choose a stylist",
++    "years": "{{n}} years experience",
++    "date": "Date",
++    "availableTimes": "Available times",
++    "slotsError": "Could not load times.",
++    "noSlots": "No available times on this date. Please try another day.",
++    "summary": "Booking summary",
++    "total": "Total",
++    "payment": "Payment",
++    "payAtSalon": "Pay at the salon",
++    "payOnline": "Pay online",
++    "notes": "Notes for the salon (optional)",
++    "cancelPolicy": "You can cancel free of charge up to {{h}} hour(s) before your appointment.",
++    "confirm": "Confirm booking",
++    "booked": "Your booking is confirmed!"
++  },
++  "bookingDetails": {
++    "title": "Booking details",
++    "notFound": "Booking not found.",
++    "loadError": "Could not load this booking. Please try again.",
++    "backToBookings": "Back to my bookings",
++    "justBookedConfirmed": "Your booking is confirmed!",
++    "justBookedPending": "Your booking was received and is waiting for the salon to confirm.",
++    "keepNumber": "Keep your booking number for reference.",
++    "time": "Time",
++    "salonPhone": "Salon phone",
++    "cancelReason": "Cancellation reason",
++    "cannotCancel": "This booking can no longer be cancelled online. Please contact the salon.",
++    "reasonLabel": "Reason (optional)",
++    "keepBooking": "Keep booking",
++    "confirmCancel": "Yes, cancel booking",
++    "cancelled": "Your booking was cancelled."
+   }
+ }
+diff --git a/frontend/src/routes/ProtectedRoute.jsx b/frontend/src/routes/ProtectedRoute.jsx
+index c38f114..343869f 100644
+--- a/frontend/src/routes/ProtectedRoute.jsx
++++ b/frontend/src/routes/ProtectedRoute.jsx
+@@ -1,4 +1,4 @@
+-import { Navigate } from 'react-router-dom';
++import { Navigate, useLocation } from 'react-router-dom';
+ import { useAuth } from '../contexts/AuthContext';
+ import { ROLES } from '../constants/roles';
+ 
+@@ -10,6 +10,7 @@ const roleRedirectMap = {
+ 
+ const ProtectedRoute = ({ children, allowedRoles }) => { 
+   const { user, loading } = useAuth();
++  const location = useLocation();
+ 
+   if (loading) {
+     return (
+@@ -20,7 +21,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
+   }
+ 
+   if (!user) {
+-    return <Navigate to="/login" replace />;
++    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+   }
+ 
+   if (allowedRoles && !allowedRoles.includes(user.role)) {
+diff --git a/frontend/src/services/bookingService.js b/frontend/src/services/bookingService.js
+index fed80ff..e388c5a 100644
+--- a/frontend/src/services/bookingService.js
++++ b/frontend/src/services/bookingService.js
+@@ -1,53 +1,25 @@
+ // ============================================
+ // src/services/bookingService.js
++// Customer booking API. Dates are "yyyy-MM-dd" (salon local date) and times "HH:mm:ss" (salon local time),
++// exactly as the server returns them, so no time-zone conversion can move an appointment to another day.
+ // ============================================
+ import api from './api';
+ 
+ export const bookingService = {
+-  getAvailableSlots: async (stylistId, serviceId, date) => {
+-    const response = await api.get('/booking/available-slots', {
+-      params: { stylistId, serviceId, date }
+-    });
+-    return response.data;
+-  },
+-
+-  createBooking: async (bookingData) => {
+-    const response = await api.post('/booking', bookingData);
+-    return response.data;
+-  },
+-
+-  getMyBookings: async () => {
+-    const response = await api.get('/booking/my-bookings');
+-    return response.data;
+-  },
+-
+-  getBookingById: async (id) => {
+-    const response = await api.get(`/booking/${id}`);
+-    return response.data;
+-  },
+-
+-  cancelBooking: async (id, reason) => {
+-    const response = await api.post(`/booking/${id}/cancel`, reason);
+-    return response.data;
+-  }
+-};
+-
+-export const getAvailableSlots = async (stylistId, date) => {
+-  const response = await api.get(`/Booking/available-slots?stylistId=${stylistId}&date=${date}`);
+-  return response.data;
++  // Public catalog: salons that can be booked online, and what one salon offers.
++  getBookableSalons: async (search) =>
++    (await api.get('/catalog/salons', { params: search ? { search } : {} })).data,
++  getBookingOptions: async (salonId) =>
++    (await api.get(`/catalog/salons/${salonId}/booking-options`)).data,
++
++  getAvailableSlots: async (stylistId, serviceId, date) =>
++    (await api.get('/booking/available-slots', { params: { stylistId, serviceId, date } })).data,
++
++  // payload: { salonId, branchId, stylistId, serviceId, bookingDate, startTime, paymentType, notes }
++  createBooking: async (payload) => (await api.post('/booking', payload)).data,
++
++  getMyBookings: async () => (await api.get('/booking/my-bookings')).data,
++  getBookingById: async (id) => (await api.get(`/booking/${id}`)).data,
++  cancelBooking: async (id, reason) =>
++    (await api.post(`/booking/${id}/cancel`, { reason: reason || null })).data,
+ };
+-
+-export const createBooking = async (bookingData) => {
+-  const response = await api.post('/Booking', bookingData);
+-  return response.data;
+-};
+-
+-export const getMyBookings = async () => {
+-  const response = await api.get('/Booking/my-bookings');
+-  return response.data;
+-};
+-
+-export const cancelBooking = async (bookingId, reason) => {
+-  const response = await api.post(`/Booking/${bookingId}/cancel`, { reason });
+-  return response.data;
+-};
+\ No newline at end of file
+diff --git a/frontend/src/utils/bookingFormat.js b/frontend/src/utils/bookingFormat.js
+new file mode 100644
+index 0000000..37f5ffa
+--- /dev/null
++++ b/frontend/src/utils/bookingFormat.js
+@@ -0,0 +1,41 @@
++// ============================================
++// src/utils/bookingFormat.js
++// Shared formatting + status metadata for bookings (mirrors the server's BookingStatus enum).
++// ============================================
++
++// value -> { key, label, badge }
++export const BOOKING_STATUS = {
++  0: { key: 'pending', label: 'Pending', badge: 'badge-pending' },
++  1: { key: 'confirmed', label: 'Confirmed', badge: 'badge-confirmed' },
++  2: { key: 'inProgress', label: 'In progress', badge: 'bg-purple-100 text-purple-800' },
++  3: { key: 'completed', label: 'Completed', badge: 'badge-completed' },
++  4: { key: 'cancelled', label: 'Cancelled', badge: 'badge-cancelled' },
++  5: { key: 'noShow', label: 'No-show', badge: 'bg-gray-100 text-gray-800' },
++};
++
++export const ACTIVE_STATUSES = [0, 1, 2]; // pending, confirmed, in progress
++
++export const formatMoney = (value) =>
++  `${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })} OMR`;
++
++// "yyyy-MM-dd" -> local Date at midnight (never goes through UTC, so the day cannot shift).
++export const parseLocalDate = (isoDate) => {
++  const [y, m, d] = String(isoDate).split('-').map(Number);
++  return new Date(y, (m || 1) - 1, d || 1);
++};
++
++export const toIsoDate = (date) => {
++  const y = date.getFullYear();
++  const m = String(date.getMonth() + 1).padStart(2, '0');
++  const d = String(date.getDate()).padStart(2, '0');
++  return `${y}-${m}-${d}`;
++};
++
++export const formatBookingDate = (isoDate, lang) =>
++  parseLocalDate(isoDate).toLocaleDateString(lang, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
++
++// "10:00:00" | "10:00" -> "10:00"
++export const hhmm = (time) => String(time).slice(0, 5);
++
++// Pick the Arabic name when the UI is Arabic and one exists.
++export const localized = (lang, name, nameAr) => (lang?.startsWith('ar') && nameAr ? nameAr : name);
+-- 
+2.43.0
+

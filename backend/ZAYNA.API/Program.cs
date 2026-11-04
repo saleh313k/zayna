@@ -1,6 +1,8 @@
 using System.Threading.RateLimiting;
 // ZAYNA.API/Program.cs
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -10,6 +12,7 @@ using System.Text.Json.Serialization;
 using Zayna.Core.Interfaces;
 using Zayna.Infrastructure.Data;
 using Zayna.Infrastructure.Services;
+using ZAYNA.API.Health;
 using ZAYNA.API.Middlewares;
 using ZAYNA.Core.Entities;
 using ZAYNA.Core.Interfaces;
@@ -17,6 +20,19 @@ using ZAYNA.Infrastructure.Data;
 using ZAYNA.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Production logs are one JSON object per line on stdout (easy to search with `docker compose logs`).
+// Set Logging:JsonConsole=false to get plain text instead.
+if (!builder.Environment.IsDevelopment() && builder.Configuration.GetValue("Logging:JsonConsole", true))
+{
+    builder.Logging.ClearProviders();
+    builder.Logging.AddJsonConsole(o =>
+    {
+        o.IncludeScopes = false;
+        o.UseUtcTimestamp = true;
+        o.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
+    });
+}
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -210,6 +226,26 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+// Reverse proxy support. ONLY enable (Proxy:TrustForwardedHeaders=true) when the API is reachable exclusively
+// through your own reverse proxy (as in docker-compose.prod.yml, where the API port is not published): otherwise a
+// client could forge X-Forwarded-For and dodge the login rate limit. With ForwardLimit = 1 only the address appended
+// by the proxy is used.
+var trustForwardedHeaders = builder.Configuration.GetValue("Proxy:TrustForwardedHeaders", false);
+if (trustForwardedHeaders)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        o.ForwardLimit = 1;
+        o.KnownNetworks.Clear();
+        o.KnownProxies.Clear();
+    });
+}
+
+// Health: /health/live = the process answers; /health/ready = it can also reach the database.
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "ready" });
+
 // Register Services
 builder.Services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -231,6 +267,12 @@ builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddHttpClient();
 
 var app = builder.Build();
+
+// Must run before anything that looks at the client address or scheme (rate limiter, logging).
+if (trustForwardedHeaders)
+{
+    app.UseForwardedHeaders();
+}
 
 // Must be first so it wraps routing, auth and controllers.
 app.UseMiddleware<GlobalExceptionMiddleware>();
@@ -258,8 +300,47 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
-// Apply migrations and bootstrap data. A failure here must stop startup: running against a
-// missing or outdated schema would only fail later, at the user's expense.
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+// ---------------------------------------------------------------------------------------------
+// Database migrations
+//   Development:  migrated automatically at startup (convenient).
+//   Production:   Database:AutoMigrate defaults to FALSE. The API refuses to start on an outdated schema, and you
+//                 apply changes deliberately with the maintenance commands below (see docs/DEPLOYMENT.md):
+//                   dotnet ZAYNA.API.dll --pending   lists migrations not yet applied; changes nothing
+//                   dotnet ZAYNA.API.dll --migrate   applies pending migrations + ensures the admin account, then exits
+// ---------------------------------------------------------------------------------------------
+var autoMigrate = builder.Configuration.GetValue("Database:AutoMigrate", builder.Environment.IsDevelopment());
+
+if (args.Contains("--pending") || args.Contains("--migrate"))
+{
+    using var maintenanceScope = app.Services.CreateScope();
+    var db = maintenanceScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    try
+    {
+        var applied = (await db.Database.GetAppliedMigrationsAsync()).ToList();
+        var pending = (await db.Database.GetPendingMigrationsAsync()).ToList();
+        Console.WriteLine($"Applied migrations : {applied.Count}");
+        Console.WriteLine(pending.Count == 0
+            ? "Pending migrations: none"
+            : "Pending migrations:" + Environment.NewLine + "  " + string.Join(Environment.NewLine + "  ", pending));
+
+        if (args.Contains("--migrate"))
+        {
+            await DbInitializer.Initialize(db, builder.Configuration["Admin:Email"], seedDemoData: false, applyMigrations: true);
+            Console.WriteLine("Done: migrations applied and initial data ensured.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine("Maintenance command failed: " + ex.Message);
+        Environment.ExitCode = 1;
+    }
+    return;
+}
+
+// Normal startup. A failure here must stop startup: running against a missing or outdated schema would only
+// fail later, at the user's expense.
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -269,7 +350,8 @@ using (var scope = app.Services.CreateScope())
         await DbInitializer.Initialize(
             context,
             builder.Configuration["Admin:Email"],
-            seedDemoData: app.Environment.IsDevelopment());
+            seedDemoData: app.Environment.IsDevelopment(),
+            applyMigrations: autoMigrate);
     }
     catch (Exception ex)
     {

@@ -1,3 +1,5 @@
+# LOCAL DEVELOPMENT ONLY (publishes the database and API ports, uses the Developer edition of SQL Server).
+# For a real server use docker-compose.prod.yml and follow docs/DEPLOYMENT.md.
 name: zayna
 
 services:
