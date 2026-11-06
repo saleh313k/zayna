@@ -29,7 +29,10 @@ namespace ZAYNA.API.Controllers
         [HttpPost]
         public async Task<IActionResult> AddReview([FromBody] AddReviewRequest request)
         {
-            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            // A missing/garbled id claim must be a 401, never an unhandled exception (500).
+            if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var userId))
+                return Unauthorized();
+
             var customer = await _context.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
 
             if (customer == null)

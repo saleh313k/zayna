@@ -260,9 +260,6 @@ builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<PublicSalonService>();
 
 
-// AutoMapper
-builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
-
 // HttpClient for external APIs
 builder.Services.AddHttpClient();
 

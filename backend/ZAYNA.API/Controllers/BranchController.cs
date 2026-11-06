@@ -109,7 +109,7 @@ namespace ZAYNA.API.Controllers
                         b.Salon.SalonNameAr,
                         b.Salon.Rating
                     },
-                    Distance = CalculateDistance(latitude, longitude, b.Latitude.Value, b.Longitude.Value)
+                    Distance = CalculateDistance(latitude, longitude, b.Latitude.GetValueOrDefault(), b.Longitude.GetValueOrDefault())
                 })
                 .Where(b => b.Distance <= radiusKm)
                 .OrderBy(b => b.Distance)

@@ -287,7 +287,7 @@ namespace Zayna.API.Controllers
                 query = query.Where(b =>
                     (b.BookingNumber != null && b.BookingNumber.Contains(term)) ||
                     b.Customer.FullName.Contains(term) ||
-                    b.Salon.SalonName.Contains(term));
+                    (b.Salon.SalonName != null && b.Salon.SalonName.Contains(term)));
             }
 
             var total = await query.CountAsync();
