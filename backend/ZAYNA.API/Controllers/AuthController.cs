@@ -27,6 +27,7 @@ namespace Zayna.API.Controllers
         /// <summary>
         /// Send a one-time verification code to the supplied phone number.
         /// </summary>
+        [EnableRateLimiting("auth")]
         [HttpPost("send-otp")]
         public async Task<IActionResult> SendOtp([FromBody] SendOtpDto dto)
         {
@@ -56,6 +57,7 @@ namespace Zayna.API.Controllers
         /// Verify and consume a one-time code for its specified purpose.
         /// Registration and login endpoints verify their own codes as part of the operation.
         /// </summary>
+        [EnableRateLimiting("auth")]
         [HttpPost("verify-otp")]
         public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpDto dto)
         {
@@ -83,6 +85,7 @@ namespace Zayna.API.Controllers
         /// <summary>
         /// Register a new user. AuthService verifies and consumes the registration OTP.
         /// </summary>
+        [EnableRateLimiting("auth")]
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterDto dto)
         {
@@ -93,6 +96,7 @@ namespace Zayna.API.Controllers
         /// <summary>
         /// Log in with phone number and OTP. AuthService verifies and consumes the login OTP.
         /// </summary>
+        [EnableRateLimiting("auth")]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
