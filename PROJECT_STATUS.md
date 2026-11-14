@@ -59,7 +59,7 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 | SMS (Twilio) | Dormant | Keys are placeholders; code path skips quietly. Optional/last per roadmap. |
 | Online payments (Thawani) | **Not implemented** | 3 methods in `ThawaniPaymentService` throw `NotImplementedException`; `Payments:OnlineEnabled=false` |
 | Phone/OTP login | Legacy, unused by UI | Endpoints exist; frontend does not call them |
-| Customer profile page | Not audited in depth | `Profile.jsx` exists and is routed |
+| Customer profile page | **Real data now (UNVERIFIED backend)** | New `CustomerController`: `GET /api/customer/me` (name, email, phone, member-since, loyalty balance, booking counts, favourite salon) and `PUT /api/customer/me` (display name only; email/phone are sign-in identifiers and need verification before they can be editable). `Profile.jsx` rewritten to use it; the invented rewards/stats, inert Redeem button and fake notification toggles were removed. |
 
 ## 5. Bugs and technical issues
 
@@ -89,7 +89,9 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 - i18n: EN 476 keys vs AR 477; `home.footerColumns` is a string in EN but an object in AR (and `home.dir` missing in AR) - possible footer rendering bug.
 - `.env.example` omits `VITE_EMAILJS_*` and `VITE_WHATSAPP_NUMBER`, which the code reads.
 - Bundle is 925 KB (single chunk); no code splitting.
-- **Customer `Profile.jsx` shows invented data to real users (HIGH, product decision needed):** 250 loyalty points, "10% off next booking" / "Free upgrade" rewards, "12 total bookings", "Favorite Salon: Elite Salon", "Member Since Jan 2024", an inert "Redeem Points" button, and "Save" that toasts success **without calling any API**. Replace with real data (loyalty points are stored server-side) or remove the fake blocks.
+- ~~Customer `Profile.jsx` showed invented data~~ **Fixed (see 4)**. It had hard-coded loyalty points, fake rewards/stats, an inert Redeem button, fake notification toggles and a Save that never called an API. `CustomerController.cs` was a 0-byte file. Still open on this page: loyalty *redemption* does not exist (backend has `CanRedeem/Deduct` but no endpoint/UI/reward catalogue); no per-user notification preferences.
+- **Fixed: `LoyaltyService.GetCustomerPointsAsync` returned the number of history rows (always 0, collection not loaded) instead of `LoyaltyPointsBalance`.** 5 new unit tests (`LoyaltyServiceTests.cs`, not run).
+- Loyalty points are awarded (10) every time a booking is set to Completed; whether the status policy blocks Completed->Completed was not verified - check for double-award.
 - **ESLint is not usable**: `.eslintrc.cjs` and `.eslintrc.json` both exist, but there is no `lint` script and no `eslint` dependency in `package.json`. Add a flat `eslint.config.js` + devDependencies if linting is wanted.
 - `salonService.js:43` calls `/booking/salon/${id}/` with trailing slash (works in ASP.NET, cosmetic).
 - 21 backend routes are not called by the frontend (OTP auth, reviews, branch/nearby, publicsalons search, salon branch/stylist POST/PUT, service CRUD). Some are superseded by `/api/owner/*`; candidates for removal/auditing (attack surface).
@@ -139,6 +141,7 @@ If sharing build output with a new session: paste `dotnet build` errors/warnings
 
 | Date | Session | Summary |
 |---|---|---|
+| 2026-11-14 | 2d (profile) | Replaced the fake customer Profile with real data (new `CustomerController`, `AuthContext.updateUser`), fixed loyalty balance bug, 5 tests. `vite build` exit 0; i18n parity verified; Roslyn syntax-only check clean for new C#. Backend still not compiled by anyone after `fe13d30`. |
 | 2026-11-14 | 2c (password recovery) | Forgot/reset/change password end to end (stateless token, no migration), EN/AR UI, 13 xunit tests written. Token logic executed via standalone harness (20/20 pass); `vite build` exit 0. Found: fake data on Profile page, unusable ESLint setup. Backend still not compiled by anyone after `fe13d30`. |
 | 2026-11-14 | 2b (email) | Owner: build OK (10 warnings), will rotate JWT, `.bak` deletion approved, SMTP chosen. Added SMTP email + bilingual templates, rewrote/registered reminder scheduler, cancellation notices, config + tests. Roslyn syntax-only check clean; not compiled. |
 | 2026-11-14 | 2 (recovery) | Full audit. Resolved 16 conflict-marker files (verified), rate-limited 4 legacy auth endpoints, added missing EF migration (unverified), created this file. Frontend build verified; backend could not be built (no NuGet access). Nothing pushed. |

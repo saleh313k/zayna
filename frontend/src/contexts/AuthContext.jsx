@@ -60,6 +60,16 @@ export const AuthProvider = ({ children }) => {
     return response;
   };
 
+  // Merge changed fields (e.g. a new display name) into the signed-in user, in state and in storage.
+  const updateUser = (changes) => {
+    setUser((current) => {
+      if (!current) return current;
+      const next = { ...current, ...changes };
+      localStorage.setItem('user', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const logout = () => {
     authService.logout();
     localStorage.removeItem('token');
@@ -68,7 +78,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, googleLogin, emailLogin, emailRegister, registerSalon, logout, loading }}>
+    <AuthContext.Provider value={{ user, googleLogin, emailLogin, emailRegister, registerSalon, logout, updateUser, loading }}>
       {children}
     </AuthContext.Provider>
   );
