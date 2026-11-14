@@ -15,13 +15,16 @@ namespace Zayna.API.Controllers
     {
         private readonly IAuthService _authService;
         private readonly IOtpService _otpService;
+        private readonly IPasswordService _passwordService;
 
         public AuthController(
             IAuthService authService,
-            IOtpService otpService)
+            IOtpService otpService,
+            IPasswordService passwordService)
         {
             _authService = authService;
             _otpService = otpService;
+            _passwordService = passwordService;
         }
 
         /// <summary>
@@ -144,6 +147,41 @@ namespace Zayna.API.Controllers
         /// Upgrade the signed-in Customer to a Salon owner. The salon stays hidden from the public
         /// until an admin approves it. Returns a fresh token carrying the Salon role.
         /// </summary>
+        /// <summary>
+        /// Starts a password reset. Always answers 200 with the same message, whether or not the address has an account,
+        /// so it cannot be used to discover which emails are registered.
+        /// </summary>
+        [EnableRateLimiting("auth")]
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordDto dto)
+        {
+            await _passwordService.RequestResetAsync(dto?.Email);
+            return Ok(new { success = true, message = "If an account exists for this email, a reset link has been sent." });
+        }
+
+        /// <summary>Completes a password reset using the token from the emailed link.</summary>
+        [EnableRateLimiting("auth")]
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordDto dto)
+        {
+            await _passwordService.ResetAsync(dto?.Token, dto?.NewPassword);
+            return Ok(new { success = true, message = "Your password has been changed. You can now sign in." });
+        }
+
+        /// <summary>Changes the password of the signed-in user (requires the current password).</summary>
+        [Authorize]
+        [EnableRateLimiting("auth")]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+        {
+            var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            if (!Guid.TryParse(value, out var userId))
+                return Unauthorized();
+
+            await _passwordService.ChangeAsync(userId, dto?.CurrentPassword, dto?.NewPassword);
+            return Ok(new { success = true, message = "Your password has been changed." });
+        }
+
         [Authorize(Roles = "Customer")]
         [HttpPost("register-salon")]
         public async Task<IActionResult> RegisterSalon([FromBody] RegisterSalonDto dto)

@@ -149,6 +149,47 @@ namespace ZAYNA.Infrastructure.Services
                 Wrap(en, ar));
         }
 
+        private static string Button(string url, string label) =>
+            "<p style=\"margin:16px 0\"><a href=\"" + E(url) + "\" style=\"background:#111;color:#fff;text-decoration:none;" +
+            "padding:10px 18px;border-radius:6px;display:inline-block\">" + E(label) + "</a></p>";
+
+        public static EmailContent PasswordReset(string? name, string link, int validMinutes)
+        {
+            var en = "<h2 style=\"margin:0 0 8px;font-size:18px\">Reset your password</h2>" +
+                     "<p style=\"margin:0 0 8px\">" + E(Greeting(name, false)) + " we received a request to reset your ZAYNA password.</p>" +
+                     Button(link, "Choose a new password") +
+                     "<p style=\"margin:0;color:#666\">This link works once and expires in " + validMinutes.ToString(CultureInfo.InvariantCulture) +
+                     " minutes. If you did not ask for this, you can ignore this email; your password will not change.</p>";
+            var ar = "<h2 style=\"margin:0 0 8px;font-size:18px\">إعادة تعيين كلمة المرور</h2>" +
+                     "<p style=\"margin:0 0 8px\">" + E(Greeting(name, true)) + " وصلنا طلب لإعادة تعيين كلمة مرور حسابك في زينة.</p>" +
+                     Button(link, "اختيار كلمة مرور جديدة") +
+                     "<p style=\"margin:0;color:#666\">يعمل هذا الرابط مرة واحدة فقط وينتهي خلال " + validMinutes.ToString(CultureInfo.InvariantCulture) +
+                     " دقيقة. إذا لم تطلب ذلك فتجاهل هذه الرسالة ولن تتغير كلمة مرورك.</p>";
+            return new EmailContent("Reset your ZAYNA password | إعادة تعيين كلمة المرور", Wrap(en, ar));
+        }
+
+        public static EmailContent UseGoogleSignIn(string? name, string loginUrl)
+        {
+            var en = "<h2 style=\"margin:0 0 8px;font-size:18px\">Sign in with Google</h2>" +
+                     "<p style=\"margin:0 0 8px\">" + E(Greeting(name, false)) + " your ZAYNA account uses Google sign-in, so it has no password to reset.</p>" +
+                     Button(loginUrl, "Go to sign in");
+            var ar = "<h2 style=\"margin:0 0 8px;font-size:18px\">سجّل الدخول عبر جوجل</h2>" +
+                     "<p style=\"margin:0 0 8px\">" + E(Greeting(name, true)) + " حسابك في زينة يستخدم تسجيل الدخول عبر جوجل، لذلك لا توجد كلمة مرور لإعادة تعيينها.</p>" +
+                     Button(loginUrl, "الانتقال إلى تسجيل الدخول");
+            return new EmailContent("Your ZAYNA account uses Google sign-in | حسابك يستخدم جوجل", Wrap(en, ar));
+        }
+
+        public static EmailContent PasswordChanged(string? name)
+        {
+            var en = "<h2 style=\"margin:0 0 8px;font-size:18px\">Your password was changed</h2>" +
+                     "<p style=\"margin:0\">" + E(Greeting(name, false)) + " the password of your ZAYNA account was just changed. " +
+                     "If this was not you, reset your password immediately and contact support.</p>";
+            var ar = "<h2 style=\"margin:0 0 8px;font-size:18px\">تم تغيير كلمة المرور</h2>" +
+                     "<p style=\"margin:0\">" + E(Greeting(name, true)) + " تم تغيير كلمة مرور حسابك في زينة للتو. " +
+                     "إذا لم تكن أنت، فأعد تعيين كلمة المرور فوراً وتواصل مع الدعم.</p>";
+            return new EmailContent("Your ZAYNA password was changed | تم تغيير كلمة المرور", Wrap(en, ar));
+        }
+
         public static EmailContent Otp(string code)
         {
             var codeHtml = "<p style=\"font-size:28px;letter-spacing:4px;font-weight:bold;margin:12px 0\">" + E(code) + "</p>";

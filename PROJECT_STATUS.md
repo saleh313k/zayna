@@ -1,7 +1,7 @@
 # ZAYNA - Project Status
 
 *Single source of truth for resuming work. Update at the end of every session.*
-*Last updated: 2026-11-14 (Session 2 - recovery audit + email/notifications). Branch: `chore/recover-and-stabilize`.*
+*Last updated: 2026-11-14 (Session 2 - recovery audit + email/notifications + password recovery). Branch: `chore/recover-and-stabilize`.*
 
 **Evidence labels used below**
 - **VERIFIED** = I executed or directly inspected it in this session.
@@ -55,6 +55,7 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 | Loyalty points | Partial | Points awarded on completion; no UI, no redemption |
 | Email notifications (SMTP) | **Implemented, UNVERIFIED** | `SmtpEmailService` (MailKit), bilingual EN/AR `EmailTemplates`, confirmation + cancellation + reminder emails via `NotificationService`. Needs real SMTP settings and a first end-to-end test. |
 | Booking reminders | **Implemented, UNVERIFIED** | `NotificationScheduler` rewritten (salon-local time, 5-min cycle, dedupe via saved Notification, no busy-loop) and now registered in `Program.cs`. Pure timing rule in `ReminderPolicy`. |
+| Password recovery (forgot / reset / change) | **Implemented; token logic executed, rest UNVERIFIED** | Stateless signed token (no new table): `PasswordResetTokens`, `PasswordService`; `POST /api/auth/{forgot-password,reset-password,change-password}`; pages `/forgot-password`, `/reset-password`, `/account/password` (customers; linked from Profile). Link on the login form. |
 | SMS (Twilio) | Dormant | Keys are placeholders; code path skips quietly. Optional/last per roadmap. |
 | Online payments (Thawani) | **Not implemented** | 3 methods in `ThawaniPaymentService` throw `NotImplementedException`; `Payments:OnlineEnabled=false` |
 | Phone/OTP login | Legacy, unused by UI | Endpoints exist; frontend does not call them |
@@ -68,6 +69,7 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 3. **Unthrottled legacy auth endpoints (MEDIUM).** `send-otp` (anonymous, sends paid SMS = SMS-pumping/cost abuse), `verify-otp`, `register`, `login` now carry `[EnableRateLimiting("auth")]` (10/min/IP). Trivial attribute; **UNVERIFIED compile**.
 
 4. **Email & reminders (ROADMAP S1, part 1) - UNVERIFIED.** New: `SmtpEmailService`, `NoopEmailService` (used when no provider is configured), `EmailTemplates`, `ReminderPolicy`; rewritten `NotificationService` (adds `BookingId` to notifications, email for confirm/cancel/remind, all channels best-effort) and `NotificationScheduler`. `BookingController` now sends the cancellation notice on both cancel paths (`/cancel` and `/status` -> Cancelled); previously nothing called `SendBookingCancellationAsync`. Fixed old scheduler bugs: enum-vs-string query (would fail at runtime) and the catch block that skipped the delay (busy loop). Added `MailKit 4.8.0`. Provider selection in `Program.cs`: `Email:Provider=SendGrid` -> SendGrid; else SMTP if `Smtp:Host` set; else no-op. Config keys: `Smtp:*`, `Notifications:RemindersEnabled`, `Notifications:ReminderLeadMinutes` (default 120); mirrored in `docker-compose.prod.yml` and `.env.production.example` (`SMTP_*`). 11 new unit tests in `ZAYNA.Tests/NotificationTests.cs` (not run). Known limits: single API instance only; failed reminder emails are not retried; salon owners are not emailed yet.
+6. **Password recovery (ROADMAP S1, part 2).** Design: token = `userId.expiry.HMAC-SHA256(derivedKey, userId|expiry|CURRENT passwordHash)`; unforgeable, expires (`Auth:ResetTokenMinutes`, default 60, clamp 10-1440), and **single-use** because a password change alters the hash. Key is derived (domain-separated) from `JwtSettings:SecretKey` - **rotating the JWT secret invalidates outstanding reset links** (harmless). Link is `{App:PublicUrl or first Cors origin}/reset-password#token=...` (URL *fragment*: never sent to servers/Referer; the page strips it from the address bar). Anti-enumeration: `forgot-password` always returns the same 200 message; the email is sent on a background task so timing does not leak; max 3 requests/hour/email. Google-only and Admin accounts get a "you use Google sign-in" email instead of a link and cannot reset/change a password. A reset clears the sign-in lockout; reset/change send a "password changed" email. Change-password verifies the current password (5 failures -> 15 min lock). All three endpoints are `[EnableRateLimiting("auth")]`. In Development the reset link is written to the API log (so you can test without SMTP). **Executed here:** a standalone harness compiled the real `PasswordResetTokens.cs` and ran 20 checks (expiry, single-use, wrong key, tampering, malformed/oversized input, URL-safe format): all passed. **Not executed:** the xunit tests (`PasswordResetTokenTests.cs`), `PasswordService`, controllers, templates (no NuGet). Frontend `vite build` exit 0 and EN/AR i18n key parity verified. Known limits: existing JWTs stay valid up to their lifetime after a password change (no token revocation / security stamp); change-password page is customer-only (salon owners have no account page yet); email *verification* is not done.
 5. `saleh.bak` removed from the working tree at the owner's request. **It remains in git history** of the public repo (history rewrite not done).
 
 ### 5.2 OPEN - security (do these first)
@@ -87,6 +89,8 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 - i18n: EN 476 keys vs AR 477; `home.footerColumns` is a string in EN but an object in AR (and `home.dir` missing in AR) - possible footer rendering bug.
 - `.env.example` omits `VITE_EMAILJS_*` and `VITE_WHATSAPP_NUMBER`, which the code reads.
 - Bundle is 925 KB (single chunk); no code splitting.
+- **Customer `Profile.jsx` shows invented data to real users (HIGH, product decision needed):** 250 loyalty points, "10% off next booking" / "Free upgrade" rewards, "12 total bookings", "Favorite Salon: Elite Salon", "Member Since Jan 2024", an inert "Redeem Points" button, and "Save" that toasts success **without calling any API**. Replace with real data (loyalty points are stored server-side) or remove the fake blocks.
+- **ESLint is not usable**: `.eslintrc.cjs` and `.eslintrc.json` both exist, but there is no `lint` script and no `eslint` dependency in `package.json`. Add a flat `eslint.config.js` + devDependencies if linting is wanted.
 - `salonService.js:43` calls `/booking/salon/${id}/` with trailing slash (works in ASP.NET, cosmetic).
 - 21 backend routes are not called by the frontend (OTP auth, reviews, branch/nearby, publicsalons search, salon branch/stylist POST/PUT, service CRUD). Some are superseded by `/api/owner/*`; candidates for removal/auditing (attack surface).
 
@@ -110,7 +114,7 @@ README, `FILE_STRUCTURE.md`, `project structure` and `database/*.sql` are now fr
 3. **Local end-to-end smoke test** (register salon -> admin approves -> set hours/services/stylist -> customer books -> owner completes). Never done; fix findings.
 4. SQL Server integration tests (Testcontainers) for slot concurrency / unique booking numbers / cancel frees slot (ROADMAP S0).
 5. **Verify email**: set `Smtp__*`, create a booking, cancel it, check both emails (and spam folder; configure SPF/DKIM for the From domain). Then test reminders (set `Notifications:ReminderLeadMinutes` high and book a slot a few hours out).
-5b. Rest of ROADMAP S1: **password reset, email verification, change password** (needs a new table/migration for single-use expiring tokens - do next), in-app notification bell UI (backend `GetUserNotificationsAsync` exists; no controller/UI yet), welcome email, salon-approved/rejected emails, email the salon owner on new bookings.
+5b. **Verify password recovery**: request a reset from `/forgot-password` (Development: copy the link from the API log; production: from the email), set a new password, confirm the old link no longer works, sign in. Then rest of ROADMAP S1: **email verification** (affects login gating; needs a design decision and probably a migration), in-app notification bell UI (backend `GetUserNotificationsAsync` exists; no controller/UI yet), welcome email, salon-approved/rejected emails, email the salon owner on new bookings.
 6. Replace stubs: admin Reports (real queries + CSV), admin Settings, or hide their routes/menu entries until built. Decide Claim-salon fate (ROADMAP S10 legal question first).
 7. Reviews UI + loyalty UI (ROADMAP S3).
 8. Payments (Thawani) - only after merchant sandbox keys exist.
@@ -135,5 +139,6 @@ If sharing build output with a new session: paste `dotnet build` errors/warnings
 
 | Date | Session | Summary |
 |---|---|---|
+| 2026-11-14 | 2c (password recovery) | Forgot/reset/change password end to end (stateless token, no migration), EN/AR UI, 13 xunit tests written. Token logic executed via standalone harness (20/20 pass); `vite build` exit 0. Found: fake data on Profile page, unusable ESLint setup. Backend still not compiled by anyone after `fe13d30`. |
 | 2026-11-14 | 2b (email) | Owner: build OK (10 warnings), will rotate JWT, `.bak` deletion approved, SMTP chosen. Added SMTP email + bilingual templates, rewrote/registered reminder scheduler, cancellation notices, config + tests. Roslyn syntax-only check clean; not compiled. |
 | 2026-11-14 | 2 (recovery) | Full audit. Resolved 16 conflict-marker files (verified), rate-limited 4 legacy auth endpoints, added missing EF migration (unverified), created this file. Frontend build verified; backend could not be built (no NuGet access). Nothing pushed. |

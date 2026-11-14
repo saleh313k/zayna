@@ -266,6 +266,7 @@ builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<PublicSalonService>();
+builder.Services.AddScoped<IPasswordService, PasswordService>();
 
 // Booking reminders (Notifications:RemindersEnabled=false turns it off). Runs in the API process: keep ONE API instance.
 builder.Services.AddHostedService<NotificationScheduler>();

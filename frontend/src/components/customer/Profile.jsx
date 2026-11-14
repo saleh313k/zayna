@@ -6,7 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import { toast } from 'react-toastify';
 import Layout from '../common/Layout';
-import { FiUser, FiMail, FiPhone, FiStar, FiGift } from 'react-icons/fi';
+import { Link } from 'react-router-dom';
+import { FiUser, FiMail, FiPhone, FiStar, FiGift, FiLock } from 'react-icons/fi';
 
 const Profile = () => {
   const { t } = useTranslation();
@@ -126,6 +127,17 @@ const Profile = () => {
 
           {/* Sidebar */}
           <div className="md:col-span-1 space-y-6">
+            {/* Security */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold">{t('auth.security', 'Security')}</h3>
+                <FiLock className="text-xl text-primary" />
+              </div>
+              <Link to="/account/password" className="text-primary font-medium hover:underline">
+                {t('auth.changePasswordLink', 'Change password')}
+              </Link>
+            </div>
+
             {/* Loyalty Points */}
             <div className="card bg-gradient-to-br from-primary to-accent text-white">
               <div className="flex items-center justify-between mb-4">

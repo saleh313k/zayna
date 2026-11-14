@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 
 // forcedMode: 'login' | 'register' locks the form to one mode and hides the tab switcher.
@@ -111,8 +112,10 @@ const EmailAuthForm = ({ defaultMode = 'login', forcedMode, role, salon, onSucce
       </button>
 
       {!isRegister && (
-        <p className="text-xs text-gray-500 text-center">
-          {t('auth.forgotHint', 'Forgot your password? Sign in with Google using the same email to recover your account.')}
+        <p className="text-sm text-center">
+          <Link to="/forgot-password" className="text-primary font-medium">
+            {t('auth.forgotLink', 'Forgot your password?')}
+          </Link>
         </p>
       )}
     </form>
