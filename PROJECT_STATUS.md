@@ -1,7 +1,7 @@
 # ZAYNA - Project Status
 
 *Single source of truth for resuming work. Update at the end of every session.*
-*Last updated: 2026-11-14 (Session 2 - recovery audit). Branch: `chore/recover-and-stabilize`.*
+*Last updated: 2026-11-14 (Session 2 - recovery audit + email/notifications). Branch: `chore/recover-and-stabilize`.*
 
 **Evidence labels used below**
 - **VERIFIED** = I executed or directly inspected it in this session.
@@ -20,7 +20,9 @@
 | `npm install` + `vite build` | **VERIFIED**: exit code 0 (after conflict fixes too) |
 | SQL Server / Docker | Not available. No migration, DB or runtime test was executed. |
 
-Consequence: every backend change in this session is **UNVERIFIED by a compiler**. Run `dotnet build` and `dotnet test` locally before trusting it (commands in section 7).
+**User-reported (CLAIMED):** after the recovery commit `fe13d30`, the owner ran `dotnet build` locally: success, 10 warnings. `dotnet test` results were not reported. That build predates the email/notification work below, which is **not yet compiled by anyone**. A Roslyn *syntax-only* pass (no NuGet references) found 0 syntax errors in the changed files; it cannot catch type/signature mismatches.
+
+Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler**. Run `dotnet build` and `dotnet test` locally before trusting it (commands in section 7).
 
 ## 2. Repository state
 
@@ -51,7 +53,9 @@ Consequence: every backend change in this session is **UNVERIFIED by a compiler*
 | **Claim salon** (`/claim/:salonId`) | **Stub** | `ClaimSalon.jsx`: all API logic commented out; no backend endpoint |
 | Reviews | Backend only | `ReviewController` exists; UI never calls it (`POST /api/review`, reads unused) |
 | Loyalty points | Partial | Points awarded on completion; no UI, no redemption |
-| SMS / email notifications | **Not functional** | `NotificationScheduler` is never registered in `Program.cs`; compares UTC with local times. Twilio/SendGrid keys are placeholders. |
+| Email notifications (SMTP) | **Implemented, UNVERIFIED** | `SmtpEmailService` (MailKit), bilingual EN/AR `EmailTemplates`, confirmation + cancellation + reminder emails via `NotificationService`. Needs real SMTP settings and a first end-to-end test. |
+| Booking reminders | **Implemented, UNVERIFIED** | `NotificationScheduler` rewritten (salon-local time, 5-min cycle, dedupe via saved Notification, no busy-loop) and now registered in `Program.cs`. Pure timing rule in `ReminderPolicy`. |
+| SMS (Twilio) | Dormant | Keys are placeholders; code path skips quietly. Optional/last per roadmap. |
 | Online payments (Thawani) | **Not implemented** | 3 methods in `ThawaniPaymentService` throw `NotImplementedException`; `Payments:OnlineEnabled=false` |
 | Phone/OTP login | Legacy, unused by UI | Endpoints exist; frontend does not call them |
 | Customer profile page | Not audited in depth | `Profile.jsx` exists and is routed |
@@ -63,9 +67,12 @@ Consequence: every backend change in this session is **UNVERIFIED by a compiler*
 2. **16 files with unresolved merge markers (VERIFIED fixed).** Every file was one whole-file block whose two sides were byte-identical (a botched merge that duplicated content). Resolved by keeping one side plus any shared prefix/suffix. Files: `Readme.md`, `FILE_STRUCTURE.md`, `database/schema.sql`, `database/seed-data.sql`, `setup.ps1`, `project structure`, `frontend/.eslintrc.{cjs,json}`, `.prettierrc`, `public/{manifest.json,robots.txt}`, `ErrorBoundary.jsx`, `Modal.jsx`, `Pagination.jsx`, `hooks/useLocalStorage.js`, `docs/archive/...OLD-with-merge-conflict.md`. JSON/CJS/JSX parse OK; `vite build` exit 0. Note: the four JS/JSX files are **not imported anywhere** (dead code), and `ErrorBoundary` is not mounted.
 3. **Unthrottled legacy auth endpoints (MEDIUM).** `send-otp` (anonymous, sends paid SMS = SMS-pumping/cost abuse), `verify-otp`, `register`, `login` now carry `[EnableRateLimiting("auth")]` (10/min/IP). Trivial attribute; **UNVERIFIED compile**.
 
+4. **Email & reminders (ROADMAP S1, part 1) - UNVERIFIED.** New: `SmtpEmailService`, `NoopEmailService` (used when no provider is configured), `EmailTemplates`, `ReminderPolicy`; rewritten `NotificationService` (adds `BookingId` to notifications, email for confirm/cancel/remind, all channels best-effort) and `NotificationScheduler`. `BookingController` now sends the cancellation notice on both cancel paths (`/cancel` and `/status` -> Cancelled); previously nothing called `SendBookingCancellationAsync`. Fixed old scheduler bugs: enum-vs-string query (would fail at runtime) and the catch block that skipped the delay (busy loop). Added `MailKit 4.8.0`. Provider selection in `Program.cs`: `Email:Provider=SendGrid` -> SendGrid; else SMTP if `Smtp:Host` set; else no-op. Config keys: `Smtp:*`, `Notifications:RemindersEnabled`, `Notifications:ReminderLeadMinutes` (default 120); mirrored in `docker-compose.prod.yml` and `.env.production.example` (`SMTP_*`). 11 new unit tests in `ZAYNA.Tests/NotificationTests.cs` (not run). Known limits: single API instance only; failed reminder emails are not retried; salon owners are not emailed yet.
+5. `saleh.bak` removed from the working tree at the owner's request. **It remains in git history** of the public repo (history rewrite not done).
+
 ### 5.2 OPEN - security (do these first)
-1. **JWT signing key is committed** in `backend/ZAYNA.API/appsettings.json` (44-char value, looks real) in a **public** repo. Anyone can forge tokens (including Admin) against any deployment using it. **Action: rotate it everywhere, load from env/secret store, replace the file value with a placeholder.** Startup validation does not reject it. The key remains in git history; rotation is the only real fix.
-2. **`frontend/src/components/claim/db/saleh.bak`** (5.2 MB SQL Server backup) is tracked in a public repo. Unknown contents (possibly the scraped `PublicSalons` data, which `ROADMAP` S10 flags as legally uncertain). Not deleted by me (may be the only copy). **Decision needed**: back it up elsewhere, then remove it and consider history rewrite.
+1. **JWT signing key is committed** (owner will replace it before production - still required; must also be removed from the file)  in `backend/ZAYNA.API/appsettings.json` (44-char value, looks real) in a **public** repo. Anyone can forge tokens (including Admin) against any deployment using it. **Action: rotate it everywhere, load from env/secret store, replace the file value with a placeholder.** Startup validation does not reject it. The key remains in git history; rotation is the only real fix.
+2. **`saleh.bak`** (5.2 MB SQL Server backup, possibly scraped `PublicSalons` data - see ROADMAP S10) was deleted from the tree but is **still downloadable from git history**. If the contents are sensitive or legally risky, rewrite history (git filter-repo) and force-push.
 3. Google OAuth client id in `appsettings.json` is public by design (fine).
 4. Twilio/SendGrid/Thawani values are placeholders (checked by pattern, values not printed).
 
@@ -102,7 +109,8 @@ README, `FILE_STRUCTURE.md`, `project structure` and `database/*.sql` are now fr
 2. Verify migration `BookingModelSync` (empty-diff check + apply on a copy of real data).
 3. **Local end-to-end smoke test** (register salon -> admin approves -> set hours/services/stylist -> customer books -> owner completes). Never done; fix findings.
 4. SQL Server integration tests (Testcontainers) for slot concurrency / unique booking numbers / cancel frees slot (ROADMAP S0).
-5. Notifications MVP (ROADMAP S1): register + rewrite scheduler (salon-local time), email confirmations, password reset / email verification. **Needs your email-provider decision.**
+5. **Verify email**: set `Smtp__*`, create a booking, cancel it, check both emails (and spam folder; configure SPF/DKIM for the From domain). Then test reminders (set `Notifications:ReminderLeadMinutes` high and book a slot a few hours out).
+5b. Rest of ROADMAP S1: **password reset, email verification, change password** (needs a new table/migration for single-use expiring tokens - do next), in-app notification bell UI (backend `GetUserNotificationsAsync` exists; no controller/UI yet), welcome email, salon-approved/rejected emails, email the salon owner on new bookings.
 6. Replace stubs: admin Reports (real queries + CSV), admin Settings, or hide their routes/menu entries until built. Decide Claim-salon fate (ROADMAP S10 legal question first).
 7. Reviews UI + loyalty UI (ROADMAP S3).
 8. Payments (Thawani) - only after merchant sandbox keys exist.
@@ -127,4 +135,5 @@ If sharing build output with a new session: paste `dotnet build` errors/warnings
 
 | Date | Session | Summary |
 |---|---|---|
+| 2026-11-14 | 2b (email) | Owner: build OK (10 warnings), will rotate JWT, `.bak` deletion approved, SMTP chosen. Added SMTP email + bilingual templates, rewrote/registered reminder scheduler, cancellation notices, config + tests. Roslyn syntax-only check clean; not compiled. |
 | 2026-11-14 | 2 (recovery) | Full audit. Resolved 16 conflict-marker files (verified), rate-limited 4 legacy auth endpoints, added missing EF migration (unverified), created this file. Frontend build verified; backend could not be built (no NuGet access). Nothing pushed. |

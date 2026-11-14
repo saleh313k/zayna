@@ -251,13 +251,24 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();
-builder.Services.AddScoped<IEmailService, SendGridEmailService>();
+// Email provider: Email:Provider=SendGrid keeps the old SendGrid sender; otherwise SMTP is used when Smtp:Host is set;
+// with neither, a no-op sender logs that email is disabled (local development) and nothing else breaks.
+var emailProvider = builder.Configuration["Email:Provider"];
+if (string.Equals(emailProvider, "SendGrid", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddScoped<IEmailService, SendGridEmailService>();
+else if (!string.IsNullOrWhiteSpace(builder.Configuration["Smtp:Host"]))
+    builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+else
+    builder.Services.AddScoped<IEmailService, NoopEmailService>();
 builder.Services.AddScoped<IPaymentService, ThawaniPaymentService>();
 builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<PublicSalonService>();
+
+// Booking reminders (Notifications:RemindersEnabled=false turns it off). Runs in the API process: keep ONE API instance.
+builder.Services.AddHostedService<NotificationScheduler>();
 
 
 // HttpClient for external APIs
