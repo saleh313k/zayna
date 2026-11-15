@@ -22,7 +22,9 @@ namespace ZAYNA.Infrastructure.Services
         public async Task<int> GetCustomerPointsAsync(Guid customerId)
         {
             var customer = await _customerRepository.GetByIdAsync(customerId);
-            return customer?.LoyaltyPointsHistory.Count ?? 0;
+            // The balance column is the source of truth (the old code returned the number of history rows,
+            // and the unloaded collection made that always 0).
+            return customer?.LoyaltyPointsBalance ?? 0;
         }
 
         // ================================

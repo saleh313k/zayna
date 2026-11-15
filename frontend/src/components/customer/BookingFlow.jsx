@@ -10,6 +10,8 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { FiClock, FiMapPin, FiUser, FiCheck } from 'react-icons/fi';
 import Layout from '../common/Layout';
+import SalonReviews from '../reviews/SalonReviews';
+import { StarDisplay } from '../reviews/StarRating';
 import { bookingService } from '../../services/bookingService';
 import { formatBookingDate, formatMoney, hhmm, localized, toIsoDate } from '../../utils/bookingFormat';
 
@@ -185,6 +187,16 @@ const BookingFlow = () => {
               {salons.map((s) => (
                 <div key={s.id} className="card hover:shadow-xl transition-shadow">
                   <h2 className="text-xl font-semibold mb-1">{localized(lang, s.name, s.nameAr)}</h2>
+                  <p className="text-sm text-gray-600 mb-2 flex items-center gap-2">
+                    {s.totalReviews > 0 ? (
+                      <>
+                        <StarDisplay value={s.rating} />
+                        <span>{Number(s.rating).toFixed(1)} ({s.totalReviews})</span>
+                      </>
+                    ) : (
+                      <span>{t('reviews.noRatingYet', 'New - no reviews yet')}</span>
+                    )}
+                  </p>
                   <p className="text-sm text-gray-600 flex items-center mb-4">
                     <FiMapPin className="mr-2 rtl:mr-0 rtl:ml-2" />{[s.city, s.address].filter(Boolean).join(' - ') || '-'}
                   </p>
@@ -245,6 +257,12 @@ const BookingFlow = () => {
     <Layout>
       <div className="max-w-3xl mx-auto">
         <h1 className="text-3xl font-bold text-primary mb-1">{localized(lang, options.salon.name, options.salon.nameAr)}</h1>
+        {options.salon.totalReviews > 0 && (
+          <p className="text-sm text-gray-600 mb-1 flex items-center gap-2">
+            <StarDisplay value={options.salon.rating} />
+            <span>{Number(options.salon.rating).toFixed(1)} ({options.salon.totalReviews})</span>
+          </p>
+        )}
         <p className="text-gray-600 mb-6">{t('bookingFlow.title', 'Book an appointment')}</p>
 
         {/* Progress */}
@@ -432,6 +450,8 @@ const BookingFlow = () => {
             </div>
           </div>
         )}
+
+        <SalonReviews salonId={options.salon.id} />
       </div>
     </Layout>
   );

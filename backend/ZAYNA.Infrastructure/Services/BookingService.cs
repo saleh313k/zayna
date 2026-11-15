@@ -258,7 +258,7 @@ namespace ZAYNA.Infrastructure.Services
 
             var stylist = await _context.Stylists.AsNoTracking()
                 .Include(s => s.Branch)
-                .ThenInclude(b => b.WorkingHours)
+                .ThenInclude(b => b!.WorkingHours)
                 .FirstOrDefaultAsync(s => s.Id == stylistId && s.IsActive);
             if (stylist?.Branch == null || !stylist.Branch.IsActive || stylist.SalonId != service.SalonId)
                 return slots;

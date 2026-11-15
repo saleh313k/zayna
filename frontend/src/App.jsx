@@ -13,6 +13,9 @@ import 'react-toastify/dist/ReactToastify.css';
 
 // Components
 import Login from './components/auth/Login';
+import ForgotPassword from './components/auth/ForgotPassword';
+import ResetPassword from './components/auth/ResetPassword';
+import ChangePassword from './components/auth/ChangePassword';
 import WizardRegistration from './components/auth/WizardRegistration';
 import CustomerDashboard from './components/customer/Dashboard';
 import SalonList from './components/customer/SalonList';
@@ -55,6 +58,8 @@ function App() {
               <Route path="/home" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<WizardRegistration />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/salons" element={<SalonList />} />
               <Route path="/salons/:city/:slug" element={<SalonDetail />} />
               <Route path="/comingsoon" element={<ComingSoon />} />
@@ -67,6 +72,14 @@ function App() {
                 element={
                   <ProtectedRoute allowedRoles={[ROLES.CUSTOMER]}>
                     <CustomerDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/account/password"
+                element={
+                  <ProtectedRoute allowedRoles={[ROLES.CUSTOMER]}>
+                    <ChangePassword />
                   </ProtectedRoute>
                 }
               />

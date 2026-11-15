@@ -95,7 +95,8 @@ const SalonList = () => {
         {bookable.length > 0 && (
           <div className="mb-10">
             <h2 className="text-2xl font-semibold mb-4">{t('bookingFlow.bookOnlineTitle', 'Book online with Zayna')}</h2>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 text-xl font-semibold text-primary group-hover:text-accent transition-colors mb-2">
+
               {bookable
                 .filter((s) => {
                   const q = searchTerm.trim().toLowerCase();
@@ -103,6 +104,18 @@ const SalonList = () => {
                 })
                 .map((s) => (
                   <div key={s.id} className="card hover:shadow-xl transition-all flex flex-col">
+                                                  <div className="relative aspect-video bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg mb-4 flex items-center justify-center overflow-hidden">
+                  {/* Image */}
+                  {s.photoUrl ? (
+                    <img
+                      src={s.photoUrl}
+                      alt={s.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="text-6xl">💈</div>
+                  )}
+                </div>
                     <span className="self-start px-3 py-1 text-xs font-semibold rounded-full bg-green-600 text-white mb-3">
                       {t('salon.verified', 'Verified')}
                     </span>

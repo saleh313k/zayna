@@ -1,4 +1,3 @@
-
 // ZAYNA.API/Controllers/ReviewController.cs
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,6 +6,7 @@ using System.Security.Claims;
 using ZAYNA.Core.Entities;
 using ZAYNA.Core.Enums;
 using ZAYNA.Infrastructure.Data;
+using ZAYNA.Infrastructure.Services;
 
 namespace ZAYNA.API.Controllers
 {
@@ -15,40 +15,72 @@ namespace ZAYNA.API.Controllers
     [Route("api/[controller]")]
     public class ReviewController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private const int MaxCommentLength = 1000;
+        private const int MaxPageSize = 50;
 
-        public ReviewController(ApplicationDbContext context)
+        private readonly ApplicationDbContext _context;
+        private readonly ILogger<ReviewController> _logger;
+
+        public ReviewController(ApplicationDbContext context, ILogger<ReviewController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
+        // Row read from the database; shaped into the public response by Shape().
+        private sealed record ReviewRow(
+            Guid Id, int Rating, string? Comment, DateTime CreatedAt,
+            string? CustomerName, int ReviewerVisits, bool VerifiedVisit);
+
+        private static object Shape(ReviewRow r) => new
+        {
+            r.Id,
+            r.Rating,
+            r.Comment,
+            r.CreatedAt,
+            customerName = ReviewerCredibility.MaskName(r.CustomerName),
+            verifiedVisit = r.VerifiedVisit,
+            reviewerVisits = r.ReviewerVisits,
+            reviewerTier = ReviewerCredibility.TierFor(r.ReviewerVisits)
+        };
+
         /// <summary>
-        /// Add a review for a completed booking
+        /// Add a review for one of the signed-in customer's COMPLETED bookings (one review per booking).
         /// </summary>
         [Authorize(Roles = "Customer")]
         [HttpPost]
         public async Task<IActionResult> AddReview([FromBody] AddReviewRequest request)
         {
-            var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
-            var customer = await _context.Customers.FirstOrDefaultAsync(c => c.UserId == userId);
+            // A missing/garbled id claim must be a 401, never an unhandled exception (500).
+            if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var userId))
+                return Unauthorized();
 
+            if (request == null)
+                return BadRequest(new { success = false, code = "INVALID_REQUEST", message = "Review is required." });
+
+            if (request.Rating < 1 || request.Rating > 5)
+                return BadRequest(new { success = false, code = "INVALID_RATING", message = "Rating must be between 1 and 5." });
+
+            var comment = (request.Comment ?? string.Empty).Trim();
+            if (comment.Length > MaxCommentLength)
+                return BadRequest(new { success = false, code = "INVALID_COMMENT", message = $"Comment must be at most {MaxCommentLength} characters." });
+
+            var customer = await _context.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId);
             if (customer == null)
                 return NotFound(new { success = false, message = "Customer not found" });
 
-            // Verify booking exists and is completed
-            var booking = await _context.Bookings
-                .FirstOrDefaultAsync(b => 
-                    b.Id == request.BookingId && 
-                    b.CustomerId == customer.Id && 
+            // Verify the booking exists, is the customer's own, and is completed.
+            var booking = await _context.Bookings.AsNoTracking()
+                .FirstOrDefaultAsync(b =>
+                    b.Id == request.BookingId &&
+                    b.CustomerId == customer.Id &&
                     b.Status == BookingStatus.Completed);
 
             if (booking == null)
-                return BadRequest(new { success = false, message = "Invalid booking or booking not completed" });
+                return BadRequest(new { success = false, code = "BOOKING_NOT_REVIEWABLE", message = "Invalid booking or booking not completed" });
 
-            // Check if review already exists
-            var existingReview = await _context.Reviews.FirstOrDefaultAsync(r => r.BookingId == request.BookingId);
-            if (existingReview != null)
-                return BadRequest(new { success = false, message = "Review already submitted for this booking" });
+            if (await _context.Reviews.AnyAsync(r => r.BookingId == request.BookingId))
+                return Conflict(new { success = false, code = "REVIEW_EXISTS", message = "Review already submitted for this booking" });
 
             var review = new Review
             {
@@ -57,58 +89,91 @@ namespace ZAYNA.API.Controllers
                 SalonId = booking.SalonId,
                 StylistId = booking.StylistId,
                 Rating = request.Rating,
-                Comment = request.Comment
+                Comment = comment.Length == 0 ? null : comment
             };
-
             _context.Reviews.Add(review);
 
-            // Update salon rating
-            await UpdateSalonRating(booking.SalonId);
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                // Two simultaneous submissions: the unique index on Reviews.BookingId rejects the second one.
+                _logger.LogWarning(ex, "Duplicate review rejected for booking {BookingId}", request.BookingId);
+                return Conflict(new { success = false, code = "REVIEW_EXISTS", message = "Review already submitted for this booking" });
+            }
 
-            // Update stylist rating
-            await UpdateStylistRating(booking.StylistId);
-
+            // Ratings are recomputed AFTER the review is saved, so the new review is included. (The previous code
+            // recalculated before saving and was therefore always one review behind.)
+            await RecalculateSalonRatingAsync(booking.SalonId);
+            await RecalculateStylistRatingAsync(booking.StylistId);
             await _context.SaveChangesAsync();
-
-            return Ok(new { success = true, message = "Review submitted successfully", review });
-        }
-
-        /// <summary>
-        /// Get reviews for a salon
-        /// </summary>
-        [AllowAnonymous]
-        [HttpGet("salon/{salonId}")]
-        public async Task<IActionResult> GetSalonReviews(Guid salonId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
-        {
-            var query = _context.Reviews
-                .Include(r => r.Customer)
-                .Where(r => r.SalonId == salonId)
-                .OrderByDescending(r => r.CreatedAt);
-
-            var total = await query.CountAsync();
-            var reviews = await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(r => new
-                {
-                    r.Id,
-                    r.Rating,
-                    r.Comment,
-                    CustomerName = r.Customer.FullName,
-                    r.CreatedAt
-                })
-                .ToListAsync();
-
-            var avgRating = await _context.Reviews
-                .Where(r => r.SalonId == salonId)
-                .AverageAsync(r => (double?)r.Rating) ?? 0;
 
             return Ok(new
             {
                 success = true,
-                reviews,
+                message = "Review submitted successfully",
+                review = new { review.Id, review.Rating, review.Comment, review.CreatedAt }
+            });
+        }
+
+        /// <summary>
+        /// Whether the signed-in customer has already reviewed one of their bookings (used to show "Leave a review").
+        /// </summary>
+        [Authorize(Roles = "Customer")]
+        [HttpGet("booking/{bookingId:guid}")]
+        public async Task<IActionResult> GetMyReviewForBooking(Guid bookingId)
+        {
+            if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub"), out var userId))
+                return Unauthorized();
+
+            var review = await _context.Reviews.AsNoTracking()
+                .Where(r => r.BookingId == bookingId && r.Customer.UserId == userId)
+                .Select(r => new { r.Id, r.Rating, r.Comment, r.CreatedAt })
+                .FirstOrDefaultAsync();
+
+            return Ok(new { success = true, reviewed = review != null, review });
+        }
+
+        /// <summary>Reviews of a salon (public). Page size is capped; names are shortened for privacy.</summary>
+        [AllowAnonymous]
+        [HttpGet("salon/{salonId:guid}")]
+        public async Task<IActionResult> GetSalonReviews(Guid salonId, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        {
+            page = Math.Max(1, page);
+            pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+
+            var all = _context.Reviews.AsNoTracking().Where(r => r.SalonId == salonId);
+
+            var total = await all.CountAsync();
+            var avgRating = total == 0 ? 0 : await all.AverageAsync(r => (double)r.Rating);
+
+            var perStar = await all.GroupBy(r => r.Rating)
+                .Select(g => new { Rating = g.Key, Count = g.Count() })
+                .ToListAsync();
+            var distribution = Enumerable.Range(1, 5)
+                .Select(star => new { rating = star, count = perStar.FirstOrDefault(x => x.Rating == star)?.Count ?? 0 })
+                .ToList();
+
+            var rows = await all
+                .OrderByDescending(r => r.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(r => new ReviewRow(
+                    r.Id, r.Rating, r.Comment, r.CreatedAt,
+                    r.Customer.FullName,
+                    _context.Bookings.Count(b => b.CustomerId == r.CustomerId && b.Status == BookingStatus.Completed),
+                    r.BookingId != null))
+                .ToListAsync();
+
+            return Ok(new
+            {
+                success = true,
+                reviews = rows.Select(Shape).ToList(),
                 avgRating = Math.Round(avgRating, 1),
                 totalReviews = total,
+                distribution,
                 pagination = new
                 {
                     page,
@@ -119,69 +184,62 @@ namespace ZAYNA.API.Controllers
             });
         }
 
-        /// <summary>
-        /// Get reviews for a stylist
-        /// </summary>
+        /// <summary>Latest reviews of a stylist (public).</summary>
         [AllowAnonymous]
-        [HttpGet("stylist/{stylistId}")]
+        [HttpGet("stylist/{stylistId:guid}")]
         public async Task<IActionResult> GetStylistReviews(Guid stylistId)
         {
-            var reviews = await _context.Reviews
-                .Include(r => r.Customer)
-                .Where(r => r.StylistId == stylistId)
+            var all = _context.Reviews.AsNoTracking().Where(r => r.StylistId == stylistId);
+
+            var total = await all.CountAsync();
+            var avgRating = total == 0 ? 0 : await all.AverageAsync(r => (double)r.Rating);
+
+            var rows = await all
                 .OrderByDescending(r => r.CreatedAt)
                 .Take(20)
-                .Select(r => new
-                {
-                    r.Id,
-                    r.Rating,
-                    r.Comment,
-                    CustomerName = r.Customer.FullName,
-                    r.CreatedAt
-                })
+                .Select(r => new ReviewRow(
+                    r.Id, r.Rating, r.Comment, r.CreatedAt,
+                    r.Customer.FullName,
+                    _context.Bookings.Count(b => b.CustomerId == r.CustomerId && b.Status == BookingStatus.Completed),
+                    r.BookingId != null))
                 .ToListAsync();
-
-            var avgRating = await _context.Reviews
-                .Where(r => r.StylistId == stylistId)
-                .AverageAsync(r => (double?)r.Rating) ?? 0;
 
             return Ok(new
             {
                 success = true,
-                reviews,
+                reviews = rows.Select(Shape).ToList(),
                 avgRating = Math.Round(avgRating, 1),
-                totalReviews = reviews.Count
+                totalReviews = total
             });
         }
 
-        private async Task UpdateSalonRating(Guid salonId)
+        // Aggregates are computed by the database (no loading of every review into memory).
+        private async Task RecalculateSalonRatingAsync(Guid salonId)
         {
             var salon = await _context.Salons.FindAsync(salonId);
             if (salon == null) return;
 
-            var reviews = await _context.Reviews.Where(r => r.SalonId == salonId).ToListAsync();
-            if (reviews.Any())
-            {
-                salon.Rating = (decimal)reviews.Average(r => r.Rating);
-                salon.TotalReviews = reviews.Count;
-                salon.UpdatedAt = DateTime.UtcNow;
-            }
+            var reviews = _context.Reviews.Where(r => r.SalonId == salonId);
+            var count = await reviews.CountAsync();
+            salon.TotalReviews = count;
+            salon.Rating = count == 0 ? 0m : Math.Round((decimal)await reviews.AverageAsync(r => (double)r.Rating), 2);
+            salon.UpdatedAt = DateTime.UtcNow;
         }
 
-        private async Task UpdateStylistRating(Guid stylistId)
+        private async Task RecalculateStylistRatingAsync(Guid? stylistId)
         {
-            var stylist = await _context.Stylists.FindAsync(stylistId);
+            if (stylistId == null) return;
+            var stylist = await _context.Stylists.FindAsync(stylistId.Value);
             if (stylist == null) return;
 
-            var reviews = await _context.Reviews.Where(r => r.StylistId == stylistId).ToListAsync();
-            if (reviews.Any())
-            {
-                stylist.Rating = (decimal)reviews.Average(r => r.Rating);
-                stylist.TotalReviews = reviews.Count;
-                stylist.UpdatedAt = DateTime.UtcNow;
-            }
+            var reviews = _context.Reviews.Where(r => r.StylistId == stylistId);
+            var count = await reviews.CountAsync();
+            stylist.TotalReviews = count;
+            if (count > 0)
+                stylist.Rating = Math.Round((decimal)await reviews.AverageAsync(r => (double)r.Rating), 2);
+            stylist.UpdatedAt = DateTime.UtcNow;
         }
     }
 
-    public record AddReviewRequest(Guid BookingId, int Rating, string Comment);
+    public record AddReviewRequest(Guid BookingId, int Rating, string? Comment);
 }

@@ -8,7 +8,7 @@ namespace ZAYNA.Core.Interfaces
         /// <summary>
         /// ایجاد سشن پرداخت در Thawani و دریافت TransactionId و CheckoutUrl
         /// </summary>
-        Task<(bool Success, string TransactionId, string CheckoutUrl)> CreatePaymentAsync(Booking booking);
+        Task<(bool Success, string? TransactionId, string? CheckoutUrl)> CreatePaymentAsync(Booking booking);
 
         /// <summary>
         /// دریافت وضعیت پرداخت بر اساس TransactionId

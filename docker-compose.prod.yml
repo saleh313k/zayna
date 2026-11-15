@@ -52,6 +52,15 @@ services:
       JwtSettings__ExpiryHours: ${JWT_EXPIRY_HOURS:-24}
       GoogleSettings__ClientId: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
       Admin__Email: ${ADMIN_EMAIL:-}
+      # Outgoing email (SMTP). Leave SMTP_HOST empty to disable email; bookings still work.
+      Email__Provider: Smtp
+      Smtp__Host: ${SMTP_HOST:-}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__Security: ${SMTP_SECURITY:-StartTls}
+      Smtp__Username: ${SMTP_USERNAME:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__FromEmail: ${SMTP_FROM_EMAIL:-}
+      Smtp__FromName: ${SMTP_FROM_NAME:-ZAYNA}
       Cors__AllowedOrigins: https://${DOMAIN:?Set DOMAIN in .env}
       AllowedHosts: ${DOMAIN};localhost   # localhost is needed for the container health check
       Proxy__TrustForwardedHeaders: "true"   # safe here: the API is only reachable through Caddy

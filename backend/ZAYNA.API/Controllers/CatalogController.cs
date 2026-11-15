@@ -55,7 +55,9 @@ namespace Zayna.API.Controllers
                     City = s.Branches.Where(b => b.IsActive).Select(b => b.City).FirstOrDefault(),
                     Address = s.Branches.Where(b => b.IsActive).Select(b => b.AddressLine).FirstOrDefault(),
                     ServicesCount = s.Services.Count(sv => sv.IsActive),
-                    FromPrice = s.Services.Where(sv => sv.IsActive).Min(sv => (decimal?)sv.Price)
+                    FromPrice = s.Services.Where(sv => sv.IsActive).Min(sv => (decimal?)sv.Price),
+                    s.Rating,
+                    s.TotalReviews
                 })
                 .ToListAsync();
 
@@ -71,7 +73,7 @@ namespace Zayna.API.Controllers
         {
             var salon = await _context.Salons.AsNoTracking()
                 .Where(s => s.Id == id && s.IsVerified)
-                .Select(s => new { s.Id, Name = s.SalonName, NameAr = s.SalonNameAr, Phone = s.ContactPhone })
+                .Select(s => new { s.Id, Name = s.SalonName, NameAr = s.SalonNameAr, Phone = s.ContactPhone, s.Rating, s.TotalReviews })
                 .FirstOrDefaultAsync();
 
             if (salon == null)

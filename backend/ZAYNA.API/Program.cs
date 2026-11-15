@@ -111,6 +111,24 @@ if (string.IsNullOrWhiteSpace(jwtSecret) ||
         "JwtSettings:SecretKey must be set to a private, random secret of at least 32 characters.");
 }
 
+// The signing key that used to be committed to this public repository is burned and is refused in EVERY environment.
+// Only its SHA-256 fingerprint is stored here; a fingerprint cannot be turned back into the key.
+const string BurnedJwtKeyFingerprint = "98fec27b22d041ffa63b16e941d98e74a7904d5919e0750ec5dad52981ac47a2";
+var jwtSecretFingerprint = Convert.ToHexString(
+    System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(jwtSecret))).ToLowerInvariant();
+if (jwtSecretFingerprint == BurnedJwtKeyFingerprint)
+{
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey is a publicly known key (it was committed to the repository). Generate a new random secret.");
+}
+
+// appsettings.Development.json ships a DEV-ONLY key so local runs work; it must never reach a real deployment.
+if (!builder.Environment.IsDevelopment() && jwtSecret.StartsWith("DEV-ONLY", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey is the development-only key. Set a private secret (e.g. JWT_SECRET_KEY) outside Development.");
+}
+
 if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience))
 {
     throw new InvalidOperationException(
@@ -251,17 +269,26 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(GenericRepository<>));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGoogleTokenVerifier, GoogleTokenVerifier>();
 builder.Services.AddScoped<ISmsService, TwilioSmsService>();
-builder.Services.AddScoped<IEmailService, SendGridEmailService>();
+// Email provider: Email:Provider=SendGrid keeps the old SendGrid sender; otherwise SMTP is used when Smtp:Host is set;
+// with neither, a no-op sender logs that email is disabled (local development) and nothing else breaks.
+var emailProvider = builder.Configuration["Email:Provider"];
+if (string.Equals(emailProvider, "SendGrid", StringComparison.OrdinalIgnoreCase))
+    builder.Services.AddScoped<IEmailService, SendGridEmailService>();
+else if (!string.IsNullOrWhiteSpace(builder.Configuration["Smtp:Host"]))
+    builder.Services.AddScoped<IEmailService, SmtpEmailService>();
+else
+    builder.Services.AddScoped<IEmailService, NoopEmailService>();
 builder.Services.AddScoped<IPaymentService, ThawaniPaymentService>();
 builder.Services.AddScoped<ILoyaltyService, LoyaltyService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IBookingService, BookingService>();
 builder.Services.AddScoped<IOtpService, OtpService>();
 builder.Services.AddScoped<PublicSalonService>();
+builder.Services.AddScoped<IPasswordService, PasswordService>();
 
+// Booking reminders (Notifications:RemindersEnabled=false turns it off). Runs in the API process: keep ONE API instance.
+builder.Services.AddHostedService<NotificationScheduler>();
 
-// AutoMapper
-builder.Services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
 
 // HttpClient for external APIs
 builder.Services.AddHttpClient();

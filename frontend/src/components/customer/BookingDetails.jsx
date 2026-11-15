@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { FiCalendar, FiClock, FiMapPin, FiPhone, FiUser, FiScissors, FiCheckCircle } from 'react-icons/fi';
 import Layout from '../common/Layout';
+import ReviewForm from '../reviews/ReviewForm';
 import { bookingService } from '../../services/bookingService';
 import { BOOKING_STATUS, formatBookingDate, formatMoney, localized } from '../../utils/bookingFormat';
 
@@ -149,6 +150,9 @@ const BookingDetails = () => {
             <p>{booking.cancellationReason}</p>
           </div>
         )}
+
+        {/* Review: only for completed appointments (the server enforces this too) */}
+        {booking.status === 3 && <ReviewForm bookingId={booking.id} />}
 
         {/* Cancel */}
         {isActive && booking.canCancel && !showCancel && (

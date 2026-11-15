@@ -82,7 +82,8 @@ namespace ZAYNA.API.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("BookingNumber")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<Guid>("BranchId")
                         .HasColumnType("uniqueidentifier");
@@ -123,11 +124,8 @@ namespace ZAYNA.API.Migrations
                     b.Property<Guid>("StylistId")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<decimal>("TotalAmount")
-                        .HasColumnType("decimal(18,2)");
-
                     b.Property<decimal>("TotalPrice")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
@@ -135,6 +133,10 @@ namespace ZAYNA.API.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BookingDate");
+
+                    b.HasIndex("BookingNumber")
+                        .IsUnique()
+                        .HasFilter("[BookingNumber] IS NOT NULL");
 
                     b.HasIndex("BranchId");
 
@@ -145,6 +147,10 @@ namespace ZAYNA.API.Migrations
                     b.HasIndex("ServiceId");
 
                     b.HasIndex("StylistId");
+
+                    b.HasIndex("StylistId", "BookingDate", "StartTime")
+                        .IsUnique()
+                        .HasFilter("[Status] <> 4");
 
                     b.ToTable("Bookings");
                 });
@@ -367,7 +373,7 @@ namespace ZAYNA.API.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<Guid>("BookingId")
                         .HasColumnType("uniqueidentifier");
@@ -437,7 +443,9 @@ namespace ZAYNA.API.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("BookingId");
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasFilter("[BookingId] IS NOT NULL");
 
                     b.HasIndex("CustomerId");
 
@@ -530,7 +538,7 @@ namespace ZAYNA.API.Migrations
                         .HasColumnType("bit");
 
                     b.Property<decimal>("Price")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("decimal(18,3)");
 
                     b.Property<Guid>("SalonId")
                         .HasColumnType("uniqueidentifier");

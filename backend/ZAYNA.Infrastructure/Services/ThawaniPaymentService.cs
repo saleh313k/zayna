@@ -17,7 +17,7 @@ namespace ZAYNA.Infrastructure.Services
             _httpClient.DefaultRequestHeaders.Add("thawani-api-key", _configuration["ThawaniSettings:ApiKey"]);
         }
 
-        public async Task<(bool Success, string TransactionId, string CheckoutUrl)> CreatePaymentAsync(Booking booking)
+        public async Task<(bool Success, string? TransactionId, string? CheckoutUrl)> CreatePaymentAsync(Booking booking)
         {
             try
             {

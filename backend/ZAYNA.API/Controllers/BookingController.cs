@@ -263,6 +263,8 @@ namespace Zayna.API.Controllers
             if (!result)
                 return NotFound(new { success = false, code = "BOOKING_NOT_FOUND", message = "Booking not found." });
 
+            await NotifyCancelledAsync(booking);
+
             return Ok(new { success = true, message = "Booking cancelled successfully" });
         }
 
@@ -284,6 +286,9 @@ namespace Zayna.API.Controllers
             if (!result)
                 return NotFound(new { success = false, code = "BOOKING_NOT_FOUND", message = "Booking not found." });
 
+            if (request.Status == BookingStatus.Cancelled)
+                await NotifyCancelledAsync(booking);
+
             // Loyalty points are earned for completed appointments only (not for bookings that may be cancelled).
             if (request.Status == BookingStatus.Completed)
             {
@@ -303,6 +308,19 @@ namespace Zayna.API.Controllers
         // =====================================================================
         // HELPERS
         // =====================================================================
+
+        // Best-effort: the booking is already cancelled and must never be reported as failed because a message could not be sent.
+        private async Task NotifyCancelledAsync(Booking booking)
+        {
+            try
+            {
+                await _notificationService.SendBookingCancellationAsync(booking);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Booking cancellation notification failed for booking {BookingId}", booking.Id);
+            }
+        }
 
         private BookingResponseDto ToDto(Booking b, bool forCustomer, bool includeCustomer)
             => BookingMapper.ToDto(b, forCustomer, includeCustomer, _clock, _policy);
