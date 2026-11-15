@@ -225,6 +225,9 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.BookingId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // One review per booking, enforced by the database (the controller check alone is racy).
+            entity.HasIndex(e => e.BookingId).IsUnique();
         });
 
         // LoyaltyPointsHistory

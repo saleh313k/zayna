@@ -632,5 +632,29 @@
     "statRevenue": "إيرادات هذا الشهر",
     "nextAppointments": "المواعيد القادمة",
     "noNext": "لا توجد مواعيد قادمة."
+  },
+  "reviews": {
+    "title": "التقييمات",
+    "noReviews": "لا توجد تقييمات بعد.",
+    "onlyVerified": "التقييمات تأتي فقط من عملاء أتمّوا موعداً فعلياً.",
+    "outOf5": "من 5",
+    "basedOn": "بناءً على {{n}} تقييم",
+    "verifiedVisit": "زيارة موثّقة",
+    "tierRegular": "عميل دائم",
+    "tierTrusted": "مقيّم موثوق",
+    "visits": "{{n}} زيارات مكتملة",
+    "showMore": "عرض المزيد من التقييمات",
+    "loadError": "تعذّر تحميل التقييمات.",
+    "noRatingYet": "جديد - لا توجد تقييمات بعد",
+    "leaveReview": "اكتب تقييماً",
+    "yourRating": "تقييمك",
+    "starLabel": "{{n}} من 5 نجوم",
+    "commentLabel": "تجربتك (اختياري)",
+    "commentPlaceholder": "أخبر الآخرين عن زيارتك...",
+    "submit": "إرسال التقييم",
+    "thanks": "شكراً لك! تم نشر تقييمك.",
+    "yourReview": "تقييمك",
+    "ratingRequired": "يرجى اختيار عدد النجوم.",
+    "alreadyReviewed": "لقد قمت بتقييم هذا الحجز مسبقاً."
   }
 }

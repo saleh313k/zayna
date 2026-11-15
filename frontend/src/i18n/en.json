@@ -635,5 +635,29 @@
     "statRevenue": "Revenue this month",
     "nextAppointments": "Next appointments",
     "noNext": "No upcoming appointments."
+  },
+  "reviews": {
+    "title": "Reviews",
+    "noReviews": "No reviews yet.",
+    "onlyVerified": "Reviews come only from customers who completed an appointment.",
+    "outOf5": "out of 5",
+    "basedOn": "Based on {{n}} reviews",
+    "verifiedVisit": "Verified visit",
+    "tierRegular": "Regular customer",
+    "tierTrusted": "Trusted reviewer",
+    "visits": "{{n}} completed visits",
+    "showMore": "Show more reviews",
+    "loadError": "Could not load reviews.",
+    "noRatingYet": "New - no reviews yet",
+    "leaveReview": "Leave a review",
+    "yourRating": "Your rating",
+    "starLabel": "{{n}} out of 5 stars",
+    "commentLabel": "Your experience (optional)",
+    "commentPlaceholder": "Tell others about your visit...",
+    "submit": "Submit review",
+    "thanks": "Thank you! Your review was published.",
+    "yourReview": "Your review",
+    "ratingRequired": "Please choose a star rating.",
+    "alreadyReviewed": "You have already reviewed this booking."
   }
 }

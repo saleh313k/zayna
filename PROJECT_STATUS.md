@@ -1,7 +1,7 @@
 # ZAYNA - Project Status
 
 *Single source of truth for resuming work. Update at the end of every session.*
-*Last updated: 2026-11-14 (Session 2 - recovery audit + email/notifications + password recovery). Branch: `chore/recover-and-stabilize`.*
+*Last updated: 2026-11-15 (Session 2 - recovery audit, email, password recovery, real profile, reviews, JWT hardening). Branch: `chore/recover-and-stabilize`.*
 
 **Evidence labels used below**
 - **VERIFIED** = I executed or directly inspected it in this session.
@@ -51,8 +51,9 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 | Salon-owner area (dashboard, appointments, services, stylists, branches/hours, settings) | Implemented | `OwnerController` (13 endpoints) + `components/salon/*` |
 | Public salon pages (`/salons/:city/:slug`) | Implemented (basic) | `SalonDetail.jsx`, `PublicSalonsController` |
 | **Claim salon** (`/claim/:salonId`) | **Stub** | `ClaimSalon.jsx`: all API logic commented out; no backend endpoint |
-| Reviews | Backend only | `ReviewController` exists; UI never calls it (`POST /api/review`, reads unused) |
-| Loyalty points | Partial | Points awarded on completion; no UI, no redemption |
+| Reviews | **Implemented end to end; backend UNVERIFIED** | Rewritten `ReviewController` (rating 1-5 validated, comment <= 1000, one review per booking enforced by a UNIQUE index + 409, ratings recalculated AFTER save, page size capped to 50, masked public names "Aisha B."). UI: `ReviewForm` on completed bookings, `SalonReviews` (average, star distribution, paged list) + ratings on salon cards/header in the booking flow. Catalog now returns `rating`/`totalReviews`. |
+| Loyalty points | Partial (by design) | 10 points per completed booking; balance shown on Profile. **No redemption** (owner decision: no budget for rewards). Points are NOT used to weight ratings. |
+| Review credibility | Implemented (badge only) | Every review is a *verified visit* (own, completed booking). Reviewer tier from completed-visit count (the same events that earn points): 1-2 verified, 3-9 regular, 10+ trusted (`ReviewerCredibility`, executed: 15/15 checks). Deliberately NOT used to re-weight the star average: the headline rating stays a plain, auditable average. |
 | Email notifications (SMTP) | **Implemented, UNVERIFIED** | `SmtpEmailService` (MailKit), bilingual EN/AR `EmailTemplates`, confirmation + cancellation + reminder emails via `NotificationService`. Needs real SMTP settings and a first end-to-end test. |
 | Booking reminders | **Implemented, UNVERIFIED** | `NotificationScheduler` rewritten (salon-local time, 5-min cycle, dedupe via saved Notification, no busy-loop) and now registered in `Program.cs`. Pure timing rule in `ReminderPolicy`. |
 | Password recovery (forgot / reset / change) | **Implemented; token logic executed, rest UNVERIFIED** | Stateless signed token (no new table): `PasswordResetTokens`, `PasswordService`; `POST /api/auth/{forgot-password,reset-password,change-password}`; pages `/forgot-password`, `/reset-password`, `/account/password` (customers; linked from Profile). Link on the login form. |
@@ -73,7 +74,7 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 5. `saleh.bak` removed from the working tree at the owner's request. **It remains in git history** of the public repo (history rewrite not done).
 
 ### 5.2 OPEN - security (do these first)
-1. **JWT signing key is committed** (owner will replace it before production - still required; must also be removed from the file)  in `backend/ZAYNA.API/appsettings.json` (44-char value, looks real) in a **public** repo. Anyone can forge tokens (including Admin) against any deployment using it. **Action: rotate it everywhere, load from env/secret store, replace the file value with a placeholder.** Startup validation does not reject it. The key remains in git history; rotation is the only real fix.
+1. **JWT signing key - HARDENED, rotation still required.** The key that was committed to this public repo is removed from the working tree and **refused by the API at startup in every environment** (only its SHA-256 fingerprint is stored in `Program.cs`). `appsettings.json` now has an empty key (must come from `JWT_SECRET_KEY` / user-secrets); `appsettings.Development.json` has a new `DEV-ONLY-...` key, which the API refuses outside Development. The old key remains in git history, so tokens signed with it must be considered forgeable: never use it again. Generate a production secret (>= 32 random chars) before deploying. Existing local login sessions are invalidated once (new dev key).
 2. **`saleh.bak`** (5.2 MB SQL Server backup, possibly scraped `PublicSalons` data - see ROADMAP S10) was deleted from the tree but is **still downloadable from git history**. If the contents are sensitive or legally risky, rewrite history (git filter-repo) and force-push.
 3. Google OAuth client id in `appsettings.json` is public by design (fine).
 4. Twilio/SendGrid/Thawani values are placeholders (checked by pattern, values not printed).
@@ -91,7 +92,9 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 - Bundle is 925 KB (single chunk); no code splitting.
 - ~~Customer `Profile.jsx` showed invented data~~ **Fixed (see 4)**. It had hard-coded loyalty points, fake rewards/stats, an inert Redeem button, fake notification toggles and a Save that never called an API. `CustomerController.cs` was a 0-byte file. Still open on this page: loyalty *redemption* does not exist (backend has `CanRedeem/Deduct` but no endpoint/UI/reward catalogue); no per-user notification preferences.
 - **Fixed: `LoyaltyService.GetCustomerPointsAsync` returned the number of history rows (always 0, collection not loaded) instead of `LoyaltyPointsBalance`.** 5 new unit tests (`LoyaltyServiceTests.cs`, not run).
-- Loyalty points are awarded (10) every time a booking is set to Completed; whether the status policy blocks Completed->Completed was not verified - check for double-award.
+- Loyalty double-award: **checked and closed**. Completed is a final state in `AllowedTransitions`, so a repeat Completed request gets 409 before points are awarded. Residual (low): two simultaneous Completed requests could both pass the check; the award is not in the same transaction as the status change.
+- `SalonDetail.jsx` (`/salons/:city/:slug`) shows the SCRAPED public directory, not registered salons. Reviews/ratings of bookable salons appear in the booking flow (`/book?salonId=...`).
+- Reviews still lack: admin moderation (hide/delete abusive reviews), salon-owner replies, a report button, editing/deleting one's own review. Stylist ratings default to 5.0 with 0 reviews in the database; the UI must not show a stylist rating when `TotalReviews = 0` (it currently does not show stylist ratings at all).
 - **ESLint is not usable**: `.eslintrc.cjs` and `.eslintrc.json` both exist, but there is no `lint` script and no `eslint` dependency in `package.json`. Add a flat `eslint.config.js` + devDependencies if linting is wanted.
 - `salonService.js:43` calls `/booking/salon/${id}/` with trailing slash (works in ASP.NET, cosmetic).
 - 21 backend routes are not called by the frontend (OTP auth, reviews, branch/nearby, publicsalons search, salon branch/stylist POST/PUT, service CRUD). Some are superseded by `/api/owner/*`; candidates for removal/auditing (attack surface).
@@ -122,6 +125,34 @@ README, `FILE_STRUCTURE.md`, `project structure` and `database/*.sql` are now fr
 8. Payments (Thawani) - only after merchant sandbox keys exist.
 9. Clean-up: remove dead repos/files/patch files, fix csproj version mismatch, rewrite README/FILE_STRUCTURE/schema docs to match reality, delete merged remote branches.
 
+## 6b. Production-readiness checklist (honest status)
+
+Nothing below may be called done until it has been *executed*. "Written" is not "verified".
+
+**P0 - blockers (do before any real user)**
+| # | Item | Status |
+|---|---|---|
+| 1 | Backend compiles and ALL tests pass (`dotnet build`, `dotnet test`) on the latest commit | **Not verified** since `fe13d30` (owner reported build OK, 10 warnings, at that commit; 4 backend commits since) |
+| 2 | Migrations verified: `dotnet ef migrations add Check` is EMPTY after `BookingModelSync` + `ReviewIntegrity` (both hand-written); applied to a copy of real data; duplicate pre-flight queries run (in each migration's header) | Not done |
+| 3 | Production JWT secret generated and set; old key never reused | Enforced by startup; secret not yet set |
+| 4 | Full smoke test: salon registers -> admin approves -> owner sets hours/services/stylist -> customer books -> owner completes -> customer reviews -> emails arrive | Never run |
+| 5 | Real SMTP configured, SPF/DKIM/DMARC on the sender domain, test emails not in spam | Not done |
+| 6 | Staging deployment via `docker-compose.prod.yml` + Caddy (HTTPS), backup + RESTORE rehearsal (`deploy/` scripts) | Never run |
+| 7 | Legal pages (Terms, Privacy / Oman PDPL) linked in the footer and registration; decision on the scraped `PublicSalons` data (ROADMAP S10) | Not audited |
+| 8 | Remove the 2 committed `.patch` files, dead repositories, `Footer.tsx` duplicate; fix `Microsoft.Extensions.* 10.0.1` on net8.0 | Not done |
+
+**P1 - needed for a trustworthy launch**
+- Review moderation (admin hide/delete), owner reply, report button.
+- Email verification + safe email/phone change; JWT revocation after password change (security stamp).
+- Salon-owner notifications (new booking / cancellation); notification centre UI.
+- Admin Reports + Settings pages (stubs today) or hide their menu entries.
+- Observability: structured logs, `/health` + `/ready` endpoints, error tracking, alerting; confirm what exists.
+- Integration tests on real SQL Server (Testcontainers) for slot concurrency, unique booking number/review, cancellation freeing a slot.
+- CI green on every PR; ESLint flat config; frontend tests for critical flows (login, booking, review).
+- Accessibility pass (keyboard, contrast, RTL) and mobile QA; bundle splitting (925 KB single chunk).
+
+**P2 - later**: online payments (Thawani, needs merchant keys), SMS (Twilio), loyalty redemption (needs a reward decision), Claim-salon flow.
+
 ## 7. How to resume
 
 ```bash
@@ -141,6 +172,7 @@ If sharing build output with a new session: paste `dotnet build` errors/warnings
 
 | Date | Session | Summary |
 |---|---|---|
+| 2026-11-15 | 2e (reviews + JWT) | Reviews end to end (bug fixes: ratings were always one review behind, unvalidated rating, duplicate race, unbounded paging, published full names; new UI + credibility badge), migration `ReviewIntegrity` (hand-written, unverified), JWT hardening (burned-key refusal, DEV-ONLY key). Executed: `ReviewerCredibility` harness 15/15; `vite build` exit 0; i18n parity. Roslyn syntax-only clean. Backend not compiled. |
 | 2026-11-14 | 2d (profile) | Replaced the fake customer Profile with real data (new `CustomerController`, `AuthContext.updateUser`), fixed loyalty balance bug, 5 tests. `vite build` exit 0; i18n parity verified; Roslyn syntax-only check clean for new C#. Backend still not compiled by anyone after `fe13d30`. |
 | 2026-11-14 | 2c (password recovery) | Forgot/reset/change password end to end (stateless token, no migration), EN/AR UI, 13 xunit tests written. Token logic executed via standalone harness (20/20 pass); `vite build` exit 0. Found: fake data on Profile page, unusable ESLint setup. Backend still not compiled by anyone after `fe13d30`. |
 | 2026-11-14 | 2b (email) | Owner: build OK (10 warnings), will rotate JWT, `.bak` deletion approved, SMTP chosen. Added SMTP email + bilingual templates, rewrote/registered reminder scheduler, cancellation notices, config + tests. Roslyn syntax-only check clean; not compiled. |

@@ -111,6 +111,24 @@ if (string.IsNullOrWhiteSpace(jwtSecret) ||
         "JwtSettings:SecretKey must be set to a private, random secret of at least 32 characters.");
 }
 
+// The signing key that used to be committed to this public repository is burned and is refused in EVERY environment.
+// Only its SHA-256 fingerprint is stored here; a fingerprint cannot be turned back into the key.
+const string BurnedJwtKeyFingerprint = "98fec27b22d041ffa63b16e941d98e74a7904d5919e0750ec5dad52981ac47a2";
+var jwtSecretFingerprint = Convert.ToHexString(
+    System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(jwtSecret))).ToLowerInvariant();
+if (jwtSecretFingerprint == BurnedJwtKeyFingerprint)
+{
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey is a publicly known key (it was committed to the repository). Generate a new random secret.");
+}
+
+// appsettings.Development.json ships a DEV-ONLY key so local runs work; it must never reach a real deployment.
+if (!builder.Environment.IsDevelopment() && jwtSecret.StartsWith("DEV-ONLY", StringComparison.OrdinalIgnoreCase))
+{
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey is the development-only key. Set a private secret (e.g. JWT_SECRET_KEY) outside Development.");
+}
+
 if (string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience))
 {
     throw new InvalidOperationException(
