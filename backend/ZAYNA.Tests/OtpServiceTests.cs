@@ -3,7 +3,8 @@ using Moq;
 using Xunit;
 using ZAYNA.Core.Entities;
 using ZAYNA.Core.Enums;
-using ZAYNA.Core.Interfaces;
+using Zayna.Core.Interfaces;   // ISmsService
+using ZAYNA.Core.Interfaces;   // IRepository<T>
 
 public class OtpServiceTests
 {

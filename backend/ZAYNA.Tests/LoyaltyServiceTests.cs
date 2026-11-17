@@ -1,6 +1,6 @@
 using Moq;
 using Xunit;
-using Zayna.Core.Interfaces;
+using ZAYNA.Core.Interfaces;   // IRepository<T> (note the upper-case ZAYNA namespace)
 using ZAYNA.Core.Entities;
 using ZAYNA.Infrastructure.Services;
 
