@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # ============================================
 # setup.sh - ZAYNA Quick Setup Script
 # Run this script to set up the entire system
@@ -19,7 +20,7 @@ NC='\033[0m' # No Color
 echo "${BLUE}Checking prerequisites...${NC}"
 
 command -v docker >/dev/null 2>&1 || { echo "❌ Docker is required but not installed. Aborting."; exit 1; }
-command -v docker-compose >/dev/null 2>&1 || { echo "❌ Docker Compose is required but not installed. Aborting."; exit 1; }
+command -v docker compose >/dev/null 2>&1 || { echo "❌ Docker Compose is required but not installed. Aborting."; exit 1; }
 
 echo "${GREEN}✓ Docker is installed${NC}"
 echo "${GREEN}✓ Docker Compose is installed${NC}"
@@ -65,8 +66,8 @@ echo ""
 
 # Start Docker containers
 echo "${BLUE}Starting Docker containers...${NC}"
-docker-compose down -v 2>/dev/null || true
-docker-compose up -d
+docker compose down -v 2>/dev/null || true
+docker compose up -d
 
 echo "${GREEN}✓ Containers started${NC}"
 echo ""
@@ -104,7 +105,7 @@ echo ""
 echo "Note: In development mode, OTP codes are logged to the backend console."
 echo "      Check Docker logs: docker logs zayna-backend"
 echo ""
-echo "To stop the services:  docker-compose down"
-echo "To view logs:          docker-compose logs -f"
+echo "To stop the services:  docker compose down"
+echo "To view logs:          docker compose logs -f"
 echo ""
 echo "${BLUE}Happy coding! 🎨${NC}"

@@ -1,25 +1,25 @@
+#!/usr/bin/env bash
 # ============================================
 # dev.sh - Development Helper Script
 # ============================================
 
-#!/bin/bash
 # Quick commands for development
 
 case "$1" in
   start)
     echo "🚀 Starting ZAYNA services..."
-    docker-compose up -d
+    docker compose up -d
     ;;
   stop)
     echo "🛑 Stopping ZAYNA services..."
-    docker-compose down
+    docker compose down
     ;;
   restart)
     echo "♻️  Restarting ZAYNA services..."
-    docker-compose restart
+    docker compose restart
     ;;
   logs)
-    docker-compose logs -f
+    docker compose logs -f
     ;;
   backend-logs)
     docker logs -f zayna-backend
@@ -32,7 +32,7 @@ case "$1" in
     ;;
   clean)
     echo "🧹 Cleaning up..."
-    docker-compose down -v
+    docker compose down -v
     docker system prune -f
     ;;
   backup)
@@ -43,7 +43,7 @@ case "$1" in
     ;;
   status)
     echo "📊 Service Status:"
-    docker-compose ps
+    docker compose ps
     ;;
   *)
     echo "ZAYNA Development Helper"

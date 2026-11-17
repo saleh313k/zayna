@@ -91,6 +91,10 @@ services:
       args:
         VITE_API_URL: /api
         VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID in .env}
+        VITE_EMAILJS_SERVICE_ID: ${EMAILJS_SERVICE_ID:-}
+        VITE_EMAILJS_TEMPLATE_ID: ${EMAILJS_TEMPLATE_ID:-}
+        VITE_EMAILJS_PUBLIC_KEY: ${EMAILJS_PUBLIC_KEY:-}
+        VITE_WHATSAPP_NUMBER: ${WHATSAPP_NUMBER:-}
     image: zayna-web:${APP_VERSION:-local}
     restart: unless-stopped
     environment:

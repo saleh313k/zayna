@@ -1,8 +1,8 @@
+#!/usr/bin/env bash
 # ============================================
 # test-api.sh - API Testing Script
 # ============================================
 
-#!/bin/bash
 # Quick API tests
 
 API_URL="http://localhost:5000/api"
@@ -106,5 +106,5 @@ echo ""
 echo "Next steps:"
 echo "  1. SSH to production server"
 echo "  2. Pull latest images"
-echo "  3. Run: docker-compose -f docker-compose.prod.yml up -d"
+echo "  3. Run: docker compose -f docker-compose.prod.yml up -d"
 echo ""

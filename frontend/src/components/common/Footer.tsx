@@ -3,10 +3,10 @@ import { useTranslation } from "react-i18next";
 import emailjs from "@emailjs/browser";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-const EMAILJS_SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID  ?? "zayna_bugReport";
-const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID ?? "zayna_bugReport";
-const EMAILJS_PUBLIC_KEY  = import.meta.env.VITE_EMAILJS_PUBLIC_KEY  ?? "nijiwPUpkGktDozw9";
-const WHATSAPP_NUMBER     = import.meta.env.VITE_WHATSAPP_NUMBER     ?? "96891241276";
+const EMAILJS_SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID  || "zayna_bugReport";
+const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || "zayna_bugReport";
+const EMAILJS_PUBLIC_KEY  = import.meta.env.VITE_EMAILJS_PUBLIC_KEY  || "nijiwPUpkGktDozw9";
+const WHATSAPP_NUMBER     = import.meta.env.VITE_WHATSAPP_NUMBER     || "96891241276";
 
 
 // ─── Types ──────────────────────────────────────────────────────────────────

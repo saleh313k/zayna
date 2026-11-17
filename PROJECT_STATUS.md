@@ -1,7 +1,7 @@
 # ZAYNA - Project Status
 
 *Single source of truth for resuming work. Update at the end of every session.*
-*Last updated: 2026-11-15 (Session 2 - recovery audit, email, password recovery, real profile, reviews, JWT hardening). Branch: `chore/recover-and-stabilize`.*
+*Last updated: 2026-11-17 (Session 2 - recovery audit, email, password recovery, real profile, reviews, JWT hardening, repo hygiene, docs). Branch: `chore/recover-and-stabilize`.*
 
 **Evidence labels used below**
 - **VERIFIED** = I executed or directly inspected it in this session.
@@ -82,13 +82,13 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 ### 5.3 OPEN - correctness / quality
 - `NotificationScheduler` unregistered and timezone-buggy (also in ROADMAP S0/S1).
 - No integration tests against SQL Server; concurrency/unique-booking behavior untested. Tests present: 18 (`BookingRulesTests` 11 Fact + 2 Theory, `OtpServiceTests` 5 Fact) - **never run by me**.
-- 3 duplicate repository implementations (`Data/GenericRepository.cs`, `Data/Repositories/Repository.cs`, `Repositories/Repository.cs`); two contain `NotImplementedException` members. Only `GenericRepository<>` is registered.
+- ~~3 duplicate repository implementations~~ **Fixed 2026-11-17:** the two unused `Repository<T>` copies were deleted (zero references; the registered `GenericRepository<>` stays).
 - `ZAYNA.Infrastructure.csproj` references `Microsoft.Extensions.*` **10.0.1** on a `net8.0` target (version mismatch risk).
-- `frontend/package.json` lists `"node": "^20.0.0"` as a runtime dependency (almost certainly accidental).
-- Duplicate `Footer.jsx` / `Footer.tsx`; `vite-env.d.ts` with no TypeScript; `components/common/Layout`, `pages/Dashboard.jsx` usage not audited.
-- Two committed patch files in repo root (`zayna-admin-panel.patch`, `zayna-booking-journey.patch`, ~236 KB) - leftover artifacts.
+- ~~`frontend/package.json` listed `node` as a runtime dependency~~ **Fixed 2026-11-17** (`npm uninstall node`; lockfile diff = only that package).
+- ~~Duplicate `Footer.jsx` / `Footer.tsx`~~ **Fixed 2026-11-17.** NOTE: `Footer.tsx` is the live one (imported by `App.jsx`, 329 lines: bug-report form + WhatsApp); the deleted `Footer.jsx` was an unused 34-line stub. `vite-env.d.ts` remains (harmless). Owner decision: `Footer.tsx` still ships fallback defaults for EmailJS and a WhatsApp number (`VITE_*` can override them).
+- ~~Two committed patch files in repo root~~ **Removed 2026-11-17** (still in git history).
 - i18n: EN 476 keys vs AR 477; `home.footerColumns` is a string in EN but an object in AR (and `home.dir` missing in AR) - possible footer rendering bug.
-- `.env.example` omits `VITE_EMAILJS_*` and `VITE_WHATSAPP_NUMBER`, which the code reads.
+- ~~`.env.example` omitted the footer's EmailJS/WhatsApp variables~~ **Fixed 2026-11-17**, and they now also reach production builds (Dockerfile `ARG`s + compose build args; before, production silently used the hard-coded defaults). Footer fallbacks changed from `??` to `||` so empty build args fall back instead of breaking the form.
 - Bundle is 925 KB (single chunk); no code splitting.
 - ~~Customer `Profile.jsx` showed invented data~~ **Fixed (see 4)**. It had hard-coded loyalty points, fake rewards/stats, an inert Redeem button, fake notification toggles and a Save that never called an API. `CustomerController.cs` was a 0-byte file. Still open on this page: loyalty *redemption* does not exist (backend has `CanRedeem/Deduct` but no endpoint/UI/reward catalogue); no per-user notification preferences.
 - **Fixed: `LoyaltyService.GetCustomerPointsAsync` returned the number of history rows (always 0, collection not loaded) instead of `LoyaltyPointsBalance`.** 5 new unit tests (`LoyaltyServiceTests.cs`, not run).
@@ -109,7 +109,10 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 | "A complete ... booking system" | MVP incomplete: see section 4 |
 | `docs/ROADMAP.md`: backend compiles (0 errors/58 warnings) | **CLAIMED** (user-confirmed, before Stage 0 edits); not re-verified |
 
-README, `FILE_STRUCTURE.md`, `project structure` and `database/*.sql` are now free of conflict markers but their **content is still outdated** and needs a rewrite (see next steps).
+**2026-11-17:** `Readme.md` was rewritten to match the code (no more Stripe / OTP / `sqlcmd` setup); `FILE_STRUCTURE.md` is now generated from `git ls-files` (`python3 docs/gen_file_structure.py`) so it cannot drift. Still outdated / not re-audited: `database/*.sql` (legacy reference), `docs/ARCHITECTURE.md`, `docs/TESTING_DEPLOYMENT.md`.
+
+### 5.5 Scripts (fixed 2026-11-17, `bash -n` executed on all 7: OK)
+All shell scripts were committed non-executable (mode 100644; `./deploy/scripts/deploy.sh` would fail on Linux), `setup.sh` had no shebang, `dev.sh` / `test-api.sh` had `#!/bin/bash` on line 5 (ignored), and the dev scripts used the obsolete `docker-compose` v1 command. Now: mode 100755, `#!/usr/bin/env bash` on line 1, `docker compose`. Line endings were already protected by `.gitattributes`.
 
 ## 6. Remaining MVP work (priority order)
 
@@ -139,14 +142,14 @@ Nothing below may be called done until it has been *executed*. "Written" is not 
 | 5 | Real SMTP configured, SPF/DKIM/DMARC on the sender domain, test emails not in spam | Not done |
 | 6 | Staging deployment via `docker-compose.prod.yml` + Caddy (HTTPS), backup + RESTORE rehearsal (`deploy/` scripts) | Never run |
 | 7 | Legal pages (Terms, Privacy / Oman PDPL) linked in the footer and registration; decision on the scraped `PublicSalons` data (ROADMAP S10) | Not audited |
-| 8 | Remove the 2 committed `.patch` files, dead repositories, `Footer.tsx` duplicate; fix `Microsoft.Extensions.* 10.0.1` on net8.0 | Not done |
+| 8 | Repo hygiene | **Mostly done (2026-11-17):** removed the 2 committed `.patch` files, 2 unused `Repository<T>` classes, the unused `Footer.jsx` stub (the live footer is `Footer.tsx`), the stray `node` npm dependency, a stale `project structure` file; stale hand-over note archived. **Still open:** `Microsoft.Extensions.* 10.0.1` packages on a `net8.0` target (change to 8.0.x only when you can run `dotnet restore`). |
 
 **P1 - needed for a trustworthy launch**
 - Review moderation (admin hide/delete), owner reply, report button.
 - Email verification + safe email/phone change; JWT revocation after password change (security stamp).
 - Salon-owner notifications (new booking / cancellation); notification centre UI.
 - Admin Reports + Settings pages (stubs today) or hide their menu entries.
-- Observability: structured logs, `/health` + `/ready` endpoints, error tracking, alerting; confirm what exists.
+- Observability: `/health/live` and `/health/ready` exist (verified in `Program.cs`) and non-Development logging is JSON. Still missing: error tracking, alerting, uptime monitoring.
 - Integration tests on real SQL Server (Testcontainers) for slot concurrency, unique booking number/review, cancellation freeing a slot.
 - CI green on every PR; ESLint flat config; frontend tests for critical flows (login, booking, review).
 - Accessibility pass (keyboard, contrast, RTL) and mobile QA; bundle splitting (925 KB single chunk).
@@ -172,8 +175,9 @@ If sharing build output with a new session: paste `dotnet build` errors/warnings
 
 | Date | Session | Summary |
 |---|---|---|
-| 2026-11-15 | 2e (reviews + JWT) | Reviews end to end (bug fixes: ratings were always one review behind, unvalidated rating, duplicate race, unbounded paging, published full names; new UI + credibility badge), migration `ReviewIntegrity` (hand-written, unverified), JWT hardening (burned-key refusal, DEV-ONLY key). Executed: `ReviewerCredibility` harness 15/15; `vite build` exit 0; i18n parity. Roslyn syntax-only clean. Backend not compiled. |
-| 2026-11-14 | 2d (profile) | Replaced the fake customer Profile with real data (new `CustomerController`, `AuthContext.updateUser`), fixed loyalty balance bug, 5 tests. `vite build` exit 0; i18n parity verified; Roslyn syntax-only check clean for new C#. Backend still not compiled by anyone after `fe13d30`. |
-| 2026-11-14 | 2c (password recovery) | Forgot/reset/change password end to end (stateless token, no migration), EN/AR UI, 13 xunit tests written. Token logic executed via standalone harness (20/20 pass); `vite build` exit 0. Found: fake data on Profile page, unusable ESLint setup. Backend still not compiled by anyone after `fe13d30`. |
-| 2026-11-14 | 2b (email) | Owner: build OK (10 warnings), will rotate JWT, `.bak` deletion approved, SMTP chosen. Added SMTP email + bilingual templates, rewrote/registered reminder scheduler, cancellation notices, config + tests. Roslyn syntax-only check clean; not compiled. |
-| 2026-11-14 | 2 (recovery) | Full audit. Resolved 16 conflict-marker files (verified), rate-limited 4 legacy auth endpoints, added missing EF migration (unverified), created this file. Frontend build verified; backend could not be built (no NuGet access). Nothing pushed. |
+| 2026-11-17 | 2f (hygiene + docs) | Removed dead/duplicate files, fixed scripts (shebang, +x, compose v2), piped footer env vars into production builds, rewrote README, generated FILE_STRUCTURE.md, corrected dates. `vite build` exit 0, `bash -n` on all scripts OK, YAML valid. Docker/compose not runnable here. |
+| 2026-11-17 | 2e (reviews + JWT) | Reviews end to end (bug fixes: ratings were always one review behind, unvalidated rating, duplicate race, unbounded paging, published full names; new UI + credibility badge), migration `ReviewIntegrity` (hand-written, unverified), JWT hardening (burned-key refusal, DEV-ONLY key). Executed: `ReviewerCredibility` harness 15/15; `vite build` exit 0; i18n parity. Roslyn syntax-only clean. Backend not compiled. |
+| 2026-11-17 | 2d (profile) | Replaced the fake customer Profile with real data (new `CustomerController`, `AuthContext.updateUser`), fixed loyalty balance bug, 5 tests. `vite build` exit 0; i18n parity verified; Roslyn syntax-only check clean for new C#. Backend still not compiled by anyone after `fe13d30`. |
+| 2026-11-17 | 2c (password recovery) | Forgot/reset/change password end to end (stateless token, no migration), EN/AR UI, 13 xunit tests written. Token logic executed via standalone harness (20/20 pass); `vite build` exit 0. Found: fake data on Profile page, unusable ESLint setup. Backend still not compiled by anyone after `fe13d30`. |
+| 2026-11-17 | 2b (email) | Owner: build OK (10 warnings), will rotate JWT, `.bak` deletion approved, SMTP chosen. Added SMTP email + bilingual templates, rewrote/registered reminder scheduler, cancellation notices, config + tests. Roslyn syntax-only check clean; not compiled. |
+| 2026-11-17 | 2 (recovery) | Full audit. Resolved 16 conflict-marker files (verified), rate-limited 4 legacy auth endpoints, added missing EF migration (unverified), created this file. Frontend build verified; backend could not be built (no NuGet access). Nothing pushed. |

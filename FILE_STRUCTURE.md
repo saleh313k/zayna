@@ -1,126 +1,279 @@
-﻿# ZAYNA File Structure
+# ZAYNA - file structure
 
-## Copy code from artifacts to these files:
+*Generated from `git ls-files` on 2026-11-17 by `docs/gen_file_structure.py` - do not edit by hand;
+rerun `python3 docs/gen_file_structure.py` after adding or moving files.*
 
-### Backend
-- backend\ZAYNA.Core\Entities\User.cs
-- backend\ZAYNA.Core\Entities\Customer.cs
-- backend\ZAYNA.Core\Entities\Salon.cs
-- backend\ZAYNA.Core\Entities\Branch.cs
-- backend\ZAYNA.Core\Entities\Stylist.cs
-- backend\ZAYNA.Core\Entities\Service.cs
-- backend\ZAYNA.Core\Entities\Booking.cs
-- backend\ZAYNA.Core\Entities\Payment.cs
-- backend\ZAYNA.Core\Entities\StylistService.cs
-- backend\ZAYNA.Core\Entities\BranchWorkingHours.cs
-- backend\ZAYNA.Core\Entities\LoyaltyPointsHistory.cs
-- backend\ZAYNA.Core\Entities\Notification.cs
-- backend\ZAYNA.Core\Entities\Review.cs
-- backend\ZAYNA.Core\Entities\StylistOffDay.cs
-- backend\ZAYNA.Core\Entities\OTPVerification.cs
-- backend\ZAYNA.Core\Entities\SocialAuthProvider.cs
-
-- backend\ZAYNA.Core\Interfaces\IRepository.cs
-- backend\ZAYNA.Core\Interfaces\IAuthService.cs
-- backend\ZAYNA.Core\Interfaces\ISMSService.cs
-- backend\ZAYNA.Core\Interfaces\IEmailService.cs
-- backend\ZAYNA.Core\Interfaces\IPaymentService.cs
-- backend\ZAYNA.Core\Interfaces\ILoyaltyService.cs
-- backend\ZAYNA.Core\Interfaces\INotificationService.cs
-- backend\ZAYNA.Core\Interfaces\IBookingService.cs
-- backend\ZAYNA.Infrastructure\Repositories\GenericRepository.cs
-- backend\ZAYNA.Infrastructure\Services\AuthService.cs
-- backend\ZAYNA.Infrastructure\Services\TwilioSMSService.cs
-- backend\ZAYNA.Infrastructure\Services\SendGridEmailService.cs
-
-- backend\ZAYNA.Infrastructure\Services\BookingService.cs
-- backend\ZAYNA.Infrastructure\Services\ThawaniPaymentService.cs
-- backend\ZAYNA.Infrastructure\Services\LoyaltyService.cs
-- backend\ZAYNA.Infrastructure\Services\NotificationService.cs
-
-- backend\ZAYNA.API\Controllers\AuthController.cs
-- backend\ZAYNA.API\Controllers\BookingController.cs
-- backend\ZAYNA.API\Controllers\SalonController.cs
-- backend\ZAYNA.API\Controllers\ServiceController.cs
-- backend\ZAYNA.API\Controllers\AdminController.cs
-- backend\ZAYNA.API\Controllers\CustomerController.cs
-- backend\ZAYNA.Infrastructure\Services\NotificationScheduler.cs
-- backend\ZAYNA.API\Controllers\BranchController.cs
-- backend\ZAYNA.API\Controllers\ReviewController.cs
-
-- backend\ZAYNA.API\ZAYNA.API.csproj
-- backend\ZAYNA.Core\ZAYNA.Core.csproj
-- backend\ZAYNA.Infrastructure\ZAYNA.Infrastructure.csproj
-- backend\ZAYNA.Application\ZAYNA.Application.csproj
-
-- backend\ZAYNA.Infrastructure\Data\ApplicationDbContext.cs
-- backend\ZAYNA.Infrastructure\Repositories\GenericRepository.cs
-- backend\ZAYNA.API\Program.cs
-- backend\ZAYNA.API\appsettings.json
-
-- Dockerfile
-- docker-compose.yml
-- frontend\Dockerfile
-- frontend\nginx.conf
-- .dockerignore
-- .github\workflows\deploy.yml
-- .gitignore
-
-
-
-### Frontend
-- frontend\src\App.jsx
-- frontend\src\main.jsx
-
-- frontend\src\App.jsx
-- frontend\src\context\AuthContext.jsx
-- frontend\src\context\LanguageContext.jsx
-- frontend\src\hooks\useAuth.js
-- frontend\src\hooks\useLanguage.js
-- frontend\src\components\common\ProtectedRoute.jsx
-- frontend\src\components\common\LoadingSpinner.jsx
-
-- frontend\src\services\api.js
-- frontend\src\services\authService.js
-- frontend\src\pages\Login.jsx
-- frontend\src\pages\Register.jsx
-- frontend\src\components\common\Header.jsx
-- frontend\src\components\common\LanguageSwitcher.jsx
-
-- frontend\src\pages\Dashboard.jsx
-- frontend\src\components\common\Sidebar.jsx
-- frontend\src\i18n\en.json
-- frontend\src\i18n\ar.json
-
-- frontend\src\components\customer\CustomerDashboard.jsx
-- frontend\src\components\customer\BookingForm.jsx
-- frontend\src\components\customer\MyBookings.jsx
-
-- frontend\src\components\admin\AdminDashboard.jsx
-- frontend\src\components\admin\UserManagement.jsx
-- frontend\src\components\admin\Reports.jsx
-- frontend\src\components\salon\ServiceManagement.jsx
-- frontend\src\components\salon\SalonDashboard.jsx
-- frontend\src\components\stylist\StylistDashboard.jsx
-- frontend\src\pages\NotFound.jsx
-- frontend\src\styles\globals.css
-- tailwind.config.js
-- vite.config.js
-- package.json
-- postcss.config.js
-- index.html
-- frontend\src\main.jsx
-
-- README.md
-- docs\ARCHITECTURE.md
-- docs\TESTING_DEPLOYMENT.md
-
-
-- frontend\index.html
-- frontend\vite.config.js
-- frontend\tailwind.config.js
-
-### Database
-- database\schema.sql
-
-See FILE_MAPPING.md for detailed artifact-to-file mapping.
+```
+.github/   <- CI workflow
+  workflows/
+    ci.yml
+backend/   <- ASP.NET Core 8 solution (ZAYNA.sln)
+  ZAYNA.API/   <- Web API: controllers, middleware, startup (Program.cs), EF migrations, appsettings
+    Controllers/
+      AdminController.cs
+      AuthController.cs
+      BookingController.cs
+      BranchController.cs
+      CatalogController.cs
+      CustomerController.cs
+      OwnerController.cs
+      PublicSalonsController.cs
+      ReviewController.cs
+      SalonController.cs
+      ServiceController.cs
+    Health/
+      DatabaseHealthCheck.cs
+    Mapping/
+      BookingMapper.cs
+    Middlewares/
+      GlobalExceptionMiddleware.cs
+    Migrations/   <- EF Core migrations (schema history). The app never uses EnsureCreated.
+      (9 files: 4 migrations + model snapshot)
+    Properties/
+      launchSettings.json
+    Program.cs
+    ZAYNA.API.csproj
+    appsettings.Development.json
+    appsettings.Production.json
+    appsettings.json
+  ZAYNA.Application/   <- Reserved for application-layer code (almost empty)
+    DTOs/
+      PublicSalonDto.cs
+    GlobalUsings.cs
+    ZAYNA.Application.csproj
+  ZAYNA.Core/   <- Entities, enums, DTOs, interfaces (no infrastructure dependencies)
+    DTOs/
+      AuthDtos.cs
+      BookingDtos.cs
+      PaymentDtos.cs
+      SalonDtos.cs
+      ServiceDtos.cs
+      StylistDtos.cs
+    Entities/
+      Booking.cs
+      Branch.cs
+      BranchWorkingHours.cs
+      Customer.cs
+      Enums.cs
+      LoyaltyPointsHistory.cs
+      Notification.cs
+      OTPVerification.cs
+      Payment.cs
+      PublicSalon.cs
+      Review.cs
+      Salon.cs
+      Service.cs
+      SocialAuthProvider.cs
+      Stylist.cs
+      StylistOffDay.cs
+      StylistService.cs
+      User.cs
+    Exceptions/
+      AppException.cs
+    Interfaces/
+      IAuthService.cs
+      IBookingService.cs
+      IEmailService.cs
+      IGoogleTokenVerifier.cs
+      ILoyaltyService.cs
+      INotificationService.cs
+      IOtpService.cs
+      IPasswordService.cs
+      IPaymentService.cs
+      IPublicSalonRepository.cs
+      IRepository.cs
+      ISMSService.cs
+      ISalonClock.cs
+    ZAYNA.Core.csproj
+  ZAYNA.Infrastructure/   <- EF DbContext, services (auth, booking, email, notifications, loyalty, ...)
+    Data/
+      ApplicationDbContext.cs
+      DbInitializer.cs
+      GenericRepository.cs
+    Services/
+      AuthService.cs
+      BookingPolicy.cs
+      BookingService.cs
+      EmailTemplates.cs
+      GoogleTokenVerifier.cs
+      LoyaltyService.cs
+      NoopEmailService.cs
+      NotificationScheduler.cs
+      NotificationService.cs
+      OtpService.cs
+      PasswordResetTokens.cs
+      PasswordService.cs
+      PublicSalonService.cs
+      ReminderPolicy.cs
+      ReviewerCredibility.cs
+      SalonClock.cs
+      SendGridEmailService.cs
+      SmtpEmailService.cs
+      ThawaniPaymentService.cs
+      TwilioSMSService.cs
+    GlobalUsings.cs
+    ZAYNA.Infrastructure.csproj
+  ZAYNA.Tests/   <- xUnit tests
+    BookingRulesTests.cs
+    LoyaltyServiceTests.cs
+    NotificationTests.cs
+    OtpServiceTests.cs
+    PasswordResetTokenTests.cs
+    ReviewCredibilityTests.cs
+    ZAYNA.Tests.csproj
+  .dockerignore
+  Dockerfile
+  ZAYNA.sln
+database/   <- Legacy hand-written SQL reference. NOT the migration path.
+  schema.sql
+  seed-data.sql
+deploy/   <- Production: Caddyfile, web image Dockerfile, backup/restore/deploy scripts
+  scripts/
+    backup.sh
+    deploy.sh
+    init-db.sh
+    restore.sh
+  sql/
+    init-db.sql
+  Caddyfile
+  web.Dockerfile
+docs/   <- Runbook, roadmap, architecture notes, archive of superseded documents
+  archive/
+    README-PRODUCTION.OLD.txt
+    deployment_setup_guide.OLD-with-merge-conflict.md
+  ARCHITECTURE.md
+  DEPLOYMENT.md
+  ROADMAP.md
+  TESTING_DEPLOYMENT.md
+frontend/   <- React 18 + Vite + Tailwind SPA
+  public/
+    manifest.json
+    robots.txt
+  src/
+    assets/
+      icons/
+        apple.png
+        facebook.png
+        google.png
+        linkedin.png
+        twitter.png
+      img/
+        favicon.png
+        logo.png
+    components/   <- UI by area: auth, customer, salon (owner), admin, reviews, common, ...
+      admin/
+        Bookings.jsx
+        Dashboard.jsx
+        Reports.jsx
+        SalonApprovals.jsx
+        SalonApprovalsTable.jsx
+        Users.jsx
+        adminUi.jsx
+      auth/
+        ChangePassword.jsx
+        EmailAuthForm.jsx
+        ForgotPassword.jsx
+        GoogleSignIn.jsx
+        Login.jsx
+        ResetPassword.jsx
+        WizardRegistration.jsx
+      claim/
+        ClaimSalon.jsx
+      common/
+        BugReportModal.jsx
+        ComingSoon.jsx
+        ErrorBoundary.jsx
+        Footer.tsx
+        Home.jsx
+        LanguageSwitcher.jsx
+        Layout.jsx
+        Loading.jsx
+        MainMenu.jsx
+        Modal.jsx
+        Navbar.jsx
+        Pagination.jsx
+        ScrollToTop.jsx
+        Sidebar.jsx
+      customer/
+        BookingDetails.jsx
+        BookingFlow.jsx
+        Dashboard.jsx
+        Profile.jsx
+        SalonDetail.jsx
+        SalonList.jsx
+      reviews/
+        ReviewForm.jsx
+        SalonReviews.jsx
+        StarRating.jsx
+      salon/
+        Appointments.jsx
+        BranchManagement.jsx
+        Dashboard.jsx
+        OwnerContext.jsx
+        SalonSettings.jsx
+        Services.jsx
+        StylistManagement.jsx
+        ownerUi.jsx
+    constants/
+      roles.js
+    contexts/
+      AuthContext.jsx
+      LanguageContext.jsx
+    hooks/
+      useLanguage.js
+      useLocalStorage.js
+    i18n/   <- English and Arabic translations (keep key sets identical)
+      ar.json
+      config.js
+      en.json
+    pages/
+      Dashboard.jsx
+    routes/
+      ProtectedRoute.jsx
+    services/   <- API clients (axios)
+      adminService.js
+      api.js
+      authService.js
+      bookingService.js
+      customerService.js
+      ownerService.js
+      reviewService.js
+      salonService.js
+    utils/
+      bookingFormat.js
+      dateUtils.js
+      helpers.js
+      validators.js
+    App.jsx
+    index.css
+    main.jsx
+    vite-env.d.ts
+  .dockerignore
+  .env.example
+  .eslintrc.cjs
+  .eslintrc.json
+  .gitignore
+  .prettierrc
+  Dockerfile
+  index.html
+  nginx.conf
+  package-lock.json
+  package.json
+  postcss.config.js
+  tailwind.config.js
+  vite.config.js
+.dockerignore
+.env.example
+.env.production.example
+.gitattributes
+.gitignore
+FILE_STRUCTURE.md
+PROJECT_STATUS.md
+Readme.md
+dev.sh
+docker-compose.prod.yml
+docker-compose.yml
+setup.ps1
+setup.sh
+test-api.sh
+```
