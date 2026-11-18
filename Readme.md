@@ -98,10 +98,14 @@ explicitly in production (see `docs/DEPLOYMENT.md`). The scripts in `database/` 
 not part of the migration path.
 
 ```bash
+dotnet tool restore            # once: installs the pinned dotnet-ef 8.0.x from .config/dotnet-tools.json
 cd backend
-dotnet ef migrations add <Name> --project ZAYNA.API
-dotnet ef database update --project ZAYNA.API
+dotnet ef migrations add <Name> --project ZAYNA.API --startup-project ZAYNA.API
+dotnet ef database update --project ZAYNA.API --startup-project ZAYNA.API
 ```
+
+The tool version is pinned to match EF Core 8. A newer global `dotnet-ef` (for example 10.x) fails against these
+projects with `Could not load file or assembly 'System.Runtime, Version=10.0.0.0'`.
 
 ## Tests and CI
 

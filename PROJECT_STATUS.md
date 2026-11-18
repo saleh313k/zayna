@@ -113,6 +113,9 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 
 **2026-11-17:** `Readme.md` was rewritten to match the code (no more Stripe / OTP / `sqlcmd` setup); `FILE_STRUCTURE.md` is now generated from `git ls-files` (`python3 docs/gen_file_structure.py`) so it cannot drift. Still outdated / not re-audited: `database/*.sql` (legacy reference), `docs/ARCHITECTURE.md`, `docs/TESTING_DEPLOYMENT.md`.
 
+### 5.4b `dotnet ef` fails: `Could not load file or assembly 'System.Runtime, Version=10.0.0.0'` (OPEN, owner 2026-11-17)
+`dotnet ef migrations add Check --project ZAYNA.API --startup-project ZAYNA.API` builds, then crashes in the tool host. Not a migration problem. Suspects, in order: (1) the **global `dotnet-ef` is 10.x** while the projects use EF Core **8.0.0** (fix: pinned `dotnet-ef 8.0.11` in `.config/dotnet-tools.json`; run `dotnet tool restore`, then retry); (2) `ZAYNA.Infrastructure` references `Microsoft.Extensions.Hosting / DependencyInjection.Abstractions / Http` **10.0.1** on a `net8.0` target - if the API itself fails to start with the same error, align them to 8.0.x (change only with `dotnet restore` available; watch for NU1605 downgrade errors from `Microsoft.Data.SqlClient 6.1.3`/`Azure.Identity`). Evidence wanted: `dotnet ef --version`, `dotnet --list-runtimes`, and whether `dotnet run --project ZAYNA.API` starts.
+
 ### 5.5 Scripts (fixed 2026-11-17, `bash -n` executed on all 7: OK)
 All shell scripts were committed non-executable (mode 100644; `./deploy/scripts/deploy.sh` would fail on Linux), `setup.sh` had no shebang, `dev.sh` / `test-api.sh` had `#!/bin/bash` on line 5 (ignored), and the dev scripts used the obsolete `docker-compose` v1 command. Now: mode 100755, `#!/usr/bin/env bash` on line 1, `docker compose`. Line endings were already protected by `.gitattributes`.
 
