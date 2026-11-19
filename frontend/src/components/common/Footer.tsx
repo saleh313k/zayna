@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import emailjs from "@emailjs/browser";
+import { Link } from "react-router-dom";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 const EMAILJS_SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID  || "zayna_bugReport";
@@ -299,7 +300,12 @@ export default function Footer() {
               {t("footer.copyright", { year })}
             </p>
 
-            <div className="flex items-center gap-2 order-1 sm:order-2">
+            <nav aria-label="Legal" className="flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-400 order-3 sm:order-2">
+              <Link to="/terms" className="hover:underline">{t("footer.terms", "Terms of Use")}</Link>
+              <Link to="/privacy" className="hover:underline">{t("footer.privacy", "Privacy Policy")}</Link>
+            </nav>
+
+            <div className="flex items-center gap-2 order-1 sm:order-3">
               <a
                 href={`https://wa.me/${WHATSAPP_NUMBER}`}
                 target="_blank"

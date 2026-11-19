@@ -283,6 +283,8 @@
   },
   "footer": {
     "copyright": "© {{year}} Zayna. All rights reserved.",
+    "terms": "Terms of Use",
+    "privacy": "Privacy Policy",
     "contact": "Contact Us",
     "report_bug": "Report a Bug",
     "whatsapp_aria": "Contact us on WhatsApp",
@@ -659,5 +661,10 @@
     "yourReview": "Your review",
     "ratingRequired": "Please choose a star rating.",
     "alreadyReviewed": "You have already reviewed this booking."
+  },
+  "legal": {
+    "lastUpdated": "Last updated: {{date}}",
+    "agreeNotice": "By continuing you agree to our <terms>Terms of Use</terms> and <privacy>Privacy Policy</privacy>.",
+    "agreeCheckbox": "I agree to the <terms>Terms of Use</terms> and <privacy>Privacy Policy</privacy>."
   }
 }

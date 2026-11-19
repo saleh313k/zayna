@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import Logo from '@/assets/img/logo.png';
 import GoogleSignIn from './GoogleSignIn';
 import EmailAuthForm from './EmailAuthForm';
+import LegalConsentNotice from '../legal/LegalConsentNotice';
 import { ROLES } from '../../constants/roles';
 
 export const homeForRole = (role) => {
@@ -72,6 +73,8 @@ const Login = () => {
             {t('auth.createAccountLink', 'Create an account')}
           </Link>
         </p>
+
+        <LegalConsentNotice className="mt-4" />
       </div>
     </div>
   );

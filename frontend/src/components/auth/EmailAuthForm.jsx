@@ -6,6 +6,8 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'react-toastify';
 import { Link } from 'react-router-dom';
+import { Trans } from 'react-i18next';
+import { LegalLinks } from '../legal/LegalConsentNotice';
 import { useAuth } from '../../contexts/AuthContext';
 
 // forcedMode: 'login' | 'register' locks the form to one mode and hides the tab switcher.
@@ -17,6 +19,7 @@ const EmailAuthForm = ({ defaultMode = 'login', forcedMode, role, salon, onSucce
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [agreed, setAgreed] = useState(false);
 
   const isRegister = (forcedMode || mode) === 'register';
 
@@ -103,7 +106,26 @@ const EmailAuthForm = ({ defaultMode = 'login', forcedMode, role, salon, onSucce
         </p>
       )}
 
-      <button type="submit" disabled={busy} className="btn-primary w-full">
+      {isRegister && (
+        <label className="flex items-start gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            required
+            checked={agreed}
+            onChange={(e) => setAgreed(e.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            <Trans
+              i18nKey="legal.agreeCheckbox"
+              defaults="I agree to the <terms>Terms of Use</terms> and <privacy>Privacy Policy</privacy>."
+              components={LegalLinks}
+            />
+          </span>
+        </label>
+      )}
+
+      <button type="submit" disabled={busy || (isRegister && !agreed)} className="btn-primary w-full">
         {busy
           ? t('common.loading', 'Loading...')
           : isRegister

@@ -12,6 +12,7 @@ import Logo from '@/assets/img/logo.png';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROLES } from '../../constants/roles';
 import GoogleSignIn from './GoogleSignIn';
+import LegalConsentNotice from '../legal/LegalConsentNotice';
 import EmailAuthForm from './EmailAuthForm';
 import { homeForRole } from './Login';
 
@@ -203,6 +204,7 @@ const WizardRegistration = () => {
             salon={isSalon ? salon : undefined}
             onSuccess={handleAuthenticated}
           />
+          <LegalConsentNotice />
           {divider}
           <EmailAuthForm
             forcedMode="register"

@@ -283,6 +283,8 @@
   },
   "footer": {
     "copyright": "© {{year}} زَيْنَة. جميع الحقوق محفوظة.",
+    "terms": "شروط الاستخدام",
+    "privacy": "سياسة الخصوصية",
     "contact": "تواصل معنا",
     "report_bug": "الإبلاغ عن خطأ",
     "whatsapp_aria": "تواصل معنا عبر واتساب",
@@ -656,5 +658,10 @@
     "yourReview": "تقييمك",
     "ratingRequired": "يرجى اختيار عدد النجوم.",
     "alreadyReviewed": "لقد قمت بتقييم هذا الحجز مسبقاً."
+  },
+  "legal": {
+    "lastUpdated": "آخر تحديث: {{date}}",
+    "agreeNotice": "بالمتابعة فإنك توافق على <terms>شروط الاستخدام</terms> و<privacy>سياسة الخصوصية</privacy>.",
+    "agreeCheckbox": "أوافق على <terms>شروط الاستخدام</terms> و<privacy>سياسة الخصوصية</privacy>."
   }
 }

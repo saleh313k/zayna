@@ -116,6 +116,14 @@ Consequence: backend changes made after `fe13d30` are **UNVERIFIED by a compiler
 ### 5.5 Scripts (fixed 2026-11-17, `bash -n` executed on all 7: OK)
 All shell scripts were committed non-executable (mode 100644; `./deploy/scripts/deploy.sh` would fail on Linux), `setup.sh` had no shebang, `dev.sh` / `test-api.sh` had `#!/bin/bash` on line 5 (ignored), and the dev scripts used the obsolete `docker-compose` v1 command. Now: mode 100755, `#!/usr/bin/env bash` on line 1, `docker compose`. Line endings were already protected by `.gitattributes`.
 
+### 5.6 Privacy & legal facts (verified from the code 2026-11-17; the policy text is derived from these)
+- Oman PDPL = Royal Decree 6/2022 (in force 13 Feb 2023; executive regulation: Ministerial Decision 34/2024; authority: MTCIT). Consent is the primary lawful basis; data-subject rights and cross-border-transfer rules apply. Law-firm sources disagree on enforcement details: have a lawyer confirm obligations (consent wording, breach notification timelines, transfers, any registration duty).
+- Data held: name, email, optional phone, bcrypt password hash, Google subject id/email/name, bookings (+ free-text notes, cancellation reason), reviews (public, name masked "Aisha B."), loyalty points, notification records, OTP records (phone, legacy), salon business data.
+- Browser storage only: `token` (JWT, 24 h), `user`, `language`. No cookies set by the app, no analytics.
+- Third parties: Google Sign-In; **Google Fonts** (the visitor's IP is sent to Google - self-host the fonts to avoid this); SMTP provider (emails); EmailJS (footer bug-report form); hosting provider; WhatsApp link (user-initiated).
+- **GAPS (open): no account-deletion or data-export feature exists** (the policy tells users to use the Contact button), no automatic retention/deletion, no cookie banner needed today (none set) but revisit if analytics are added.
+- Dead UI text found: `home.footerColumns` (and `home.dir`) in the i18n files are not used by any component.
+
 ## 6. Remaining MVP work (priority order)
 
 0. **Gate: run backend build + tests locally** and fix anything my unverified edits broke.
@@ -143,7 +151,7 @@ Nothing below may be called done until it has been *executed*. "Written" is not 
 | 4 | Full smoke test: salon registers -> admin approves -> owner sets hours/services/stylist -> customer books -> owner completes -> customer reviews -> emails arrive | Never run |
 | 5 | Real SMTP configured, SPF/DKIM/DMARC on the sender domain, test emails not in spam | Not done |
 | 6 | Staging deployment via `docker-compose.prod.yml` + Caddy (HTTPS), backup + RESTORE rehearsal (`deploy/` scripts) | Never run |
-| 7 | Legal pages (Terms, Privacy / Oman PDPL) linked in the footer and registration; decision on the scraped `PublicSalons` data (ROADMAP S10) | Not audited |
+| 7 | Legal pages (Terms, Privacy / Oman PDPL) | **Draft written and wired (2026-11-17), NOT launch-ready:** `/terms` and `/privacy` (EN+AR), footer links, consent notice on Login and on the registration wizard's Google button, **required consent checkbox** on email registration. **A qualified Omani lawyer must review the text** (`components/legal/legalContent.js`) before launch. Still open: account deletion/export (see 5.6), operator legal name/address/contact, the 'Salon agreement' referenced by old UI text, decision on the scraped `PublicSalons` data (ROADMAP S10). |
 | 8 | Repo hygiene | **Mostly done (2026-11-17):** removed the 2 committed `.patch` files, 2 unused `Repository<T>` classes, the unused `Footer.jsx` stub (the live footer is `Footer.tsx`), the stray `node` npm dependency, a stale `project structure` file; stale hand-over note archived. **Still open:** `Microsoft.Extensions.* 10.0.1` packages on a `net8.0` target (change to 8.0.x only when you can run `dotnet restore`). |
 
 **P1 - needed for a trustworthy launch**
@@ -177,6 +185,7 @@ If sharing build output with a new session: paste `dotnet build` errors/warnings
 
 | Date | Session | Summary |
 |---|---|---|
+| 2026-11-17 | 2h (legal) | Tests: owner ran `dotnet test` on the solution: **71/71 passed** (22 old + 49 new; first real run). `dotnet ef` failed (`System.Runtime 10.0.0.0`): pinned `dotnet-ef 8.0.11`; owner evidence pending. Added draft Terms + Privacy (EN/AR), footer links, consent checkbox/notices. Verified by execution: legal content structure parity (node), consent notice rendered in EN and AR (links correct), `vite build` exit 0. |
 | 2026-11-17 | 2g (tests found dead) | Owner pushed the branch and built it: compiles. Discovered tests were outside the solution (zero tests ever ran; CI green but empty). Added them, fixed 2 compile errors in test files, bumped MailKit to 4.16.0 (CVE). Executed 44 checks against the real OTP / loyalty / policy / clock / exception / state-machine code via a harness (all pass). xunit run itself still pending on the owner's machine. |
 | 2026-11-17 | 2f (hygiene + docs) | Removed dead/duplicate files, fixed scripts (shebang, +x, compose v2), piped footer env vars into production builds, rewrote README, generated FILE_STRUCTURE.md, corrected dates. `vite build` exit 0, `bash -n` on all scripts OK, YAML valid. Docker/compose not runnable here. |
 | 2026-11-17 | 2e (reviews + JWT) | Reviews end to end (bug fixes: ratings were always one review behind, unvalidated rating, duplicate race, unbounded paging, published full names; new UI + credibility badge), migration `ReviewIntegrity` (hand-written, unverified), JWT hardening (burned-key refusal, DEV-ONLY key). Executed: `ReviewerCredibility` harness 15/15; `vite build` exit 0; i18n parity. Roslyn syntax-only clean. Backend not compiled. |
