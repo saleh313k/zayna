@@ -11,6 +11,7 @@ import Layout from '../common/Layout';
 import { Link } from 'react-router-dom';
 import { FiUser, FiMail, FiPhone, FiStar, FiLock, FiBell } from 'react-icons/fi';
 import { customerService } from '../../services/customerService';
+import AccountData from './AccountData';
 
 const Profile = () => {
   const { t, i18n } = useTranslation();
@@ -169,6 +170,8 @@ const Profile = () => {
                 {t('customer.notificationsBody', 'You receive booking confirmations, cancellations and reminders by email.')}
               </p>
             </div>
+
+            <AccountData hasPassword={profile.hasPassword} />
           </div>
 
           <div className="md:col-span-1 space-y-6">

@@ -19,4 +19,9 @@ export const adminService = {
   setUserActive: async (id, isActive) => (await api.put(`/admin/users/${id}/status`, { isActive })).data,
 
   getBookings: async (params) => (await api.get('/admin/bookings', { params: clean(params) })).data,
+
+  // Review moderation
+  getReviews: async (params) => (await api.get('/admin/reviews', { params: clean(params) })).data,
+  removeReviewComment: async (id) => (await api.post(`/admin/reviews/${id}/remove-comment`)).data,
+  deleteReview: async (id) => (await api.delete(`/admin/reviews/${id}`)).data,
 };

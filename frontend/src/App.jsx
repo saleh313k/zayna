@@ -34,6 +34,7 @@ import Reports from './components/admin/Reports';
 import Users from './components/admin/Users';
 import SalonApprovals from './components/admin/SalonApprovals';
 import AdminBookings from './components/admin/Bookings';
+import AdminReviews from './components/admin/AdminReviews';
 import ComingSoon from './components/common/ComingSoon';
 import Footer from './components/common/Footer.tsx';
 import Home from './components/common/Home.jsx';
@@ -143,6 +144,7 @@ function App() {
                 <Route path="/admin/salons" element={<SalonApprovals />} />
                 <Route path="/admin/users" element={<Users />} />
                 <Route path="/admin/bookings" element={<AdminBookings />} />
+                <Route path="/admin/reviews" element={<AdminReviews />} />
                 <Route path="/admin/reports" element={<Reports />} />
                 <Route path="/admin/settings" element={<ComingSoon />} />
               </Route>

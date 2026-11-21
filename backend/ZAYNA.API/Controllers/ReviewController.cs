@@ -106,8 +106,8 @@ namespace ZAYNA.API.Controllers
 
             // Ratings are recomputed AFTER the review is saved, so the new review is included. (The previous code
             // recalculated before saving and was therefore always one review behind.)
-            await RecalculateSalonRatingAsync(booking.SalonId);
-            await RecalculateStylistRatingAsync(booking.StylistId);
+            await ReviewRatings.RecalculateSalonAsync(_context, booking.SalonId);
+            await ReviewRatings.RecalculateStylistAsync(_context, booking.StylistId);
             await _context.SaveChangesAsync();
 
             return Ok(new
@@ -211,33 +211,6 @@ namespace ZAYNA.API.Controllers
                 avgRating = Math.Round(avgRating, 1),
                 totalReviews = total
             });
-        }
-
-        // Aggregates are computed by the database (no loading of every review into memory).
-        private async Task RecalculateSalonRatingAsync(Guid salonId)
-        {
-            var salon = await _context.Salons.FindAsync(salonId);
-            if (salon == null) return;
-
-            var reviews = _context.Reviews.Where(r => r.SalonId == salonId);
-            var count = await reviews.CountAsync();
-            salon.TotalReviews = count;
-            salon.Rating = count == 0 ? 0m : Math.Round((decimal)await reviews.AverageAsync(r => (double)r.Rating), 2);
-            salon.UpdatedAt = DateTime.UtcNow;
-        }
-
-        private async Task RecalculateStylistRatingAsync(Guid? stylistId)
-        {
-            if (stylistId == null) return;
-            var stylist = await _context.Stylists.FindAsync(stylistId.Value);
-            if (stylist == null) return;
-
-            var reviews = _context.Reviews.Where(r => r.StylistId == stylistId);
-            var count = await reviews.CountAsync();
-            stylist.TotalReviews = count;
-            if (count > 0)
-                stylist.Rating = Math.Round((decimal)await reviews.AverageAsync(r => (double)r.Rating), 2);
-            stylist.UpdatedAt = DateTime.UtcNow;
         }
     }
 

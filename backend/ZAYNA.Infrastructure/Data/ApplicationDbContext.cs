@@ -63,6 +63,7 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<Salon>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Rating).HasColumnType("decimal(18,2)");
             entity.HasOne(e => e.User)
                 .WithOne(u => u.Salon)
                 .HasForeignKey<Salon>(e => e.UserId)
@@ -103,10 +104,15 @@ public class ApplicationDbContext : DbContext
                 .HasForeignKey(e => e.SalonId)
                 .OnDelete(DeleteBehavior.Restrict);
             
+            // WithMany(b => b.Stylists): the relationship was previously declared as WithMany(), so EF created a second,
+            // always-NULL foreign key (shadow column Stylist.BranchId1) for the Branch.Stylists collection.
             entity.HasOne(e => e.Branch)
-                .WithMany()
+                .WithMany(b => b.Stylists)
                 .HasForeignKey(e => e.BranchId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Same column type EF already used by default (decimal(18,2)); stated explicitly to silence the model warning.
+            entity.Property(e => e.Rating).HasColumnType("decimal(18,2)");
         });
 
         // Service

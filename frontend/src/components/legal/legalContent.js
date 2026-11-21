@@ -63,7 +63,7 @@ export const privacy = {
       {
         heading: '6. How long we keep your data',
         paragraphs: [
-          'We keep your data while your account exists and for as long as needed for bookings, disputes and legal obligations. Reviews stay public unless they are removed. We do not yet delete data automatically; you can ask us to delete your account and data at any time (see “Your rights”).'
+          'We keep your data while your account exists and for as long as needed for bookings, disputes and legal obligations. Reviews stay public unless they are removed. You can download your data and delete your account at any time from your Profile page. Deleting removes your name, email, phone, password, notes, loyalty points, notifications and the text of your reviews; your star ratings stay as anonymous statistics, and booking records are kept without your personal details. We do not delete data automatically after a period of inactivity.'
         ]
       },
       {
@@ -75,7 +75,7 @@ export const privacy = {
       {
         heading: '8. Your rights',
         paragraphs: [
-          'As the law allows, you may ask to see the personal data we hold about you, correct it, receive a copy, have it deleted, object to or restrict its use, and withdraw your consent. Use the Contact button in the site footer. We will respond within the time the law requires. You may also complain to the competent authority in Oman (currently the Ministry of Transport, Communications and Information Technology).'
+          'As the law allows, you may ask to see the personal data we hold about you, correct it, receive a copy, have it deleted, object to or restrict its use, and withdraw your consent. You can download your data and delete your account yourself on your Profile page; for anything else use the Contact button in the site footer. We will respond within the time the law requires. You may also complain to the competent authority in Oman (currently the Ministry of Transport, Communications and Information Technology).'
         ]
       },
       {
@@ -144,7 +144,7 @@ export const privacy = {
       {
         heading: '6. مدة الاحتفاظ ببياناتك',
         paragraphs: [
-          'نحتفظ ببياناتك ما دام حسابك قائماً وللمدة اللازمة للحجوزات والنزاعات والالتزامات القانونية. وتبقى التقييمات علنية ما لم تُزل. لا نحذف البيانات تلقائياً حتى الآن؛ ويمكنك أن تطلب منا حذف حسابك وبياناتك في أي وقت (انظر «حقوقك»).'
+          'نحتفظ ببياناتك ما دام حسابك قائماً وللمدة اللازمة للحجوزات والنزاعات والالتزامات القانونية. وتبقى التقييمات علنية ما لم تُزل. يمكنك تنزيل بياناتك وحذف حسابك في أي وقت من صفحة ملفك الشخصي. ويؤدي الحذف إلى إزالة اسمك وبريدك الإلكتروني وهاتفك وكلمة مرورك وملاحظاتك ونقاط الولاء والإشعارات ونص تقييماتك؛ وتبقى تقييمات النجوم كإحصاءات مجهولة وتُحفظ سجلات الحجز دون بياناتك الشخصية. ولا نحذف البيانات تلقائياً بعد فترة من عدم النشاط.'
         ]
       },
       {
@@ -156,7 +156,7 @@ export const privacy = {
       {
         heading: '8. حقوقك',
         paragraphs: [
-          'وفق ما يسمح به القانون، يحق لك طلب الاطلاع على البيانات الشخصية التي نحتفظ بها عنك وتصحيحها والحصول على نسخة منها وحذفها والاعتراض على استخدامها أو تقييده وسحب موافقتك. استخدم زر «تواصل معنا» في أسفل الموقع. وسنرد خلال المدة التي يحددها القانون. ويحق لك أيضاً تقديم شكوى إلى الجهة المختصة في سلطنة عُمان (حالياً وزارة النقل والاتصالات وتقنية المعلومات).'
+          'وفق ما يسمح به القانون، يحق لك طلب الاطلاع على البيانات الشخصية التي نحتفظ بها عنك وتصحيحها والحصول على نسخة منها وحذفها والاعتراض على استخدامها أو تقييده وسحب موافقتك. يمكنك تنزيل بياناتك وحذف حسابك بنفسك من صفحة ملفك الشخصي، ولأي أمر آخر استخدم زر «تواصل معنا» في أسفل الموقع. وسنرد خلال المدة التي يحددها القانون. ويحق لك أيضاً تقديم شكوى إلى الجهة المختصة في سلطنة عُمان (حالياً وزارة النقل والاتصالات وتقنية المعلومات).'
         ]
       },
       {
@@ -240,7 +240,7 @@ export const terms = {
       {
         heading: '9. Suspension and ending',
         paragraphs: [
-          'You may stop using ZAYNA at any time and ask us to delete your account. We may suspend or close accounts that break these terms or put others at risk.'
+          'You may stop using ZAYNA at any time and delete your account from your Profile page. We may suspend or close accounts that break these terms or put others at risk.'
         ]
       },
       {
@@ -325,7 +325,7 @@ export const terms = {
       {
         heading: '9. الإيقاف والإنهاء',
         paragraphs: [
-          'يمكنك التوقف عن استخدام زينة في أي وقت وطلب حذف حسابك. ويجوز لنا إيقاف أو إغلاق الحسابات التي تخالف هذه الشروط أو تعرّض الآخرين للخطر.'
+          'يمكنك التوقف عن استخدام زينة في أي وقت وحذف حسابك من صفحة ملفك الشخصي. ويجوز لنا إيقاف أو إغلاق الحسابات التي تخالف هذه الشروط أو تعرّض الآخرين للخطر.'
         ]
       },
       {
